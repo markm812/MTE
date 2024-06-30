@@ -455,6 +455,21 @@ void editorProcessKeyEvent()
 	case PAGE_UP:
 	case PAGE_DOWN:
 	{
+		/* handle row offset and preserve line position */
+		if (key == PAGE_UP)
+		{
+			EC.rowOffset -= EC.screenRows;
+			if (EC.rowOffset < 0)
+				EC.rowOffset = 0;
+		}
+		else if (key == PAGE_DOWN)
+		{
+			EC.rowOffset += EC.screenRows;
+			if (EC.rowOffset > EC.numRows)
+				EC.rowOffset = EC.numRows;
+		}
+
+		/* update cursor position */
 		int shifts = EC.screenRows;
 		while (shifts--)
 		{
