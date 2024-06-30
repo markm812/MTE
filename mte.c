@@ -338,8 +338,6 @@ void abFree(struct abuf *ab)
 }
 
 /*** input ***/
-
-// Todo: optimize, track the last direction operation and update realX in to RenderX function
 int editorRealCursorXOnLineWithTabs(EditorRow *row, int cursorX)
 {
 	int realX = 0;
@@ -361,7 +359,7 @@ void editorMoveCursorLeft()
 	if (EC.cursorX > 0)
 	{
 		EC.cursorX--;
-		EC.cursorXS = EC.cursorX;
+		EC.cursorXS = editorRowCursorXToRenderX(&EC.row[EC.cursorY], EC.cursorX);
 	}
 	else if (EC.cursorY > 0)
 	{
@@ -378,7 +376,7 @@ void editorMoveCursorRight()
 		if (EC.cursorX < EC.row[EC.cursorY].size)
 		{
 			EC.cursorX++;
-			EC.cursorXS = EC.cursorX;
+			EC.cursorXS = editorRowCursorXToRenderX(&EC.row[EC.cursorY], EC.cursorX);
 			return;
 		}
 
@@ -450,19 +448,21 @@ void editorMoveCursor(int direction)
 		break;
 	}
 
-	int rowLen = (EC.cursorY >= EC.numRows) ? 0 : EC.row[EC.cursorY].size;
-	// back to the last cursor X before the snapping
-	EC.cursorX = MAX(EC.cursorX, EC.cursorXS);
+	// snap to the last char before the tab char on vertical line changes
+	// new cursorX is at most the old cursorX
+	if (direction == ARROW_DOWN || direction == ARROW_UP)
+	{
+		// back to the last cursor X before the snapping
+		EC.cursorX = MAX(EC.cursorX, EC.cursorXS);
 
+		EC.cursorX = editorRealCursorXOnLineWithTabs(&EC.row[EC.cursorY], EC.cursorX);
+	}
+
+	int rowLen = (EC.cursorY >= EC.numRows) ? 0 : EC.row[EC.cursorY].size;
 	if (EC.cursorX > rowLen)
 	{
 		EC.cursorX = rowLen;
 	}
-
-	// snap to the last char before the tab char on vertical line changes
-	// new cursorX is at most the old cursorX
-	if (direction == ARROW_DOWN || direction == ARROW_UP)
-		EC.cursorX = editorRealCursorXOnLineWithTabs(&EC.row[EC.cursorY], EC.cursorX);
 }
 
 void editorProcessKeyEvent()
@@ -506,16 +506,18 @@ void editorProcessKeyEvent()
 	break;
 	case HOME_KEY:
 		EC.cursorX = 0;
-		editorRefreshCursor();
+		EC.cursorXS = EC.cursorX;
+		// editorRefreshCursor();
 		break;
 	case END_KEY:
 		EC.cursorX = EC.row[EC.cursorY].size;
-		editorRefreshCursor();
+		EC.cursorXS = EC.cursorX;
+		// editorRefreshCursor();
 		break;
 	case CTRL_KEY('d'):
 	{
 		FILE *fp = fopen("log.txt", "a+");
-		fprintf(fp, "cursorY: %d, rowOffset: %d\n", EC.cursorY, EC.rowOffset);
+		fprintf(fp, "cursorX: %d, cursorXS: %d, renderX: %d, renderX: %d\n", EC.cursorX, EC.cursorXS, EC.renderX, editorRowCursorXToRenderX(&EC.row[EC.cursorY], EC.cursorX));
 		fclose(fp);
 	}
 	break;
