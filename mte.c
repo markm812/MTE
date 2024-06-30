@@ -406,6 +406,32 @@ void editorMoveCursorDown()
 	}
 }
 
+void editorRefreshCursor()
+{
+	int rowLen;
+	if (EC.cursorY < EC.numRows)
+	{
+		rowLen = EC.row[EC.cursorY].size;
+	}
+	else
+	{
+		EC.cursorY = EC.numRows;
+		rowLen = 0;
+	}
+
+	if (EC.cursorX < 0)
+	{
+		EC.cursorX = 0;
+	}
+	else if (EC.cursorX > rowLen)
+	{
+		EC.cursorX = rowLen;
+	}
+
+	EC.cursorXS = EC.cursorX;
+	EC.cursorX = editorRealCursorXOnLineWithTabs(&EC.row[EC.cursorY], EC.cursorX);
+}
+
 void editorMoveCursor(int direction)
 {
 	switch (direction)
@@ -427,6 +453,7 @@ void editorMoveCursor(int direction)
 	int rowLen = (EC.cursorY >= EC.numRows) ? 0 : EC.row[EC.cursorY].size;
 	// back to the last cursor X before the snapping
 	EC.cursorX = MAX(EC.cursorX, EC.cursorXS);
+
 	if (EC.cursorX > rowLen)
 	{
 		EC.cursorX = rowLen;
@@ -479,9 +506,11 @@ void editorProcessKeyEvent()
 	break;
 	case HOME_KEY:
 		EC.cursorX = 0;
+		editorRefreshCursor();
 		break;
 	case END_KEY:
-		EC.cursorX = EC.screenColumns - 1;
+		EC.cursorX = EC.row[EC.cursorY].size;
+		editorRefreshCursor();
 		break;
 	case CTRL_KEY('d'):
 	{
