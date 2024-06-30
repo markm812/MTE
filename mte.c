@@ -468,6 +468,13 @@ void editorProcessKeyEvent()
 	case END_KEY:
 		EC.cursorX = EC.screenColumns - 1;
 		break;
+	case CTRL_KEY('d'):
+	{
+		FILE *fp = fopen("log.txt", "a+");
+		fprintf(fp, "cursorY: %d, rowOffset: %d\n", EC.cursorY, EC.rowOffset);
+		fclose(fp);
+	}
+	break;
 	}
 }
 
