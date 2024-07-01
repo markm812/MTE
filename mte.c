@@ -41,24 +41,42 @@ typedef struct EditorRow
 	char *render;
 } EditorRow;
 
-struct EditorConfig
+struct EditorContext
 {
 	int rowOffset, columnOffset;
 	int screenRows, screenColumns;
 	int cursorX, cursorY, cursorXS;
 	int renderX;
 	int numRows;
+	char *filename;
 	EditorRow *row;
 	struct termios oldtio;
 } EC;
 
 /*** terminal ***/
+void releaseMemory()
+{
+	if (EC.filename)
+	{
+		free(EC.filename);
+	}
+	if (EC.row)
+	{
+		for (int i = 0; i < EC.numRows; ++i)
+		{
+			free(EC.row[i].chars);
+			free(EC.row[i].render);
+		}
+		free(EC.row);
+	}
+}
+
 void terminate(const char *s)
 {
 	write(STDOUT_FILENO, "\x1b[2J", 4);
 	write(STDOUT_FILENO, "\x1b[H", 3);
-
 	perror(s);
+	releaseMemory();
 	exit(1);
 }
 
@@ -173,6 +191,7 @@ void editorExit()
 {
 	write(STDOUT_FILENO, "\x1b[2J", 4);
 	write(STDOUT_FILENO, "\x1b[H", 3);
+	releaseMemory();
 	exit(0);
 }
 
@@ -289,6 +308,12 @@ void editorAppendRow(char *s, size_t len)
 /*** file IO ***/
 void editorOpen(const char *filename)
 {
+	free(EC.filename);
+	size_t fnlen = strlen(filename) + 1;
+	EC.filename = malloc(fnlen);
+	if (EC.filename)
+		memcpy(EC.filename, filename, fnlen);
+
 	FILE *fp = fopen(filename, "r");
 	if (!fp)
 		terminate("[Error] fopen");
@@ -551,6 +576,31 @@ void editorScroll()
 	}
 }
 
+void editorDrawStatusBar(struct abuf *ab)
+{
+	// switch to inverted color
+	abAppend(ab, "\x1b[7m", 4);
+
+	char status[80];
+	int statusLen = snprintf(status, sizeof(status), "%.20s - %d lines",
+							 EC.filename ? EC.filename : "[Unamed]", EC.numRows);
+
+	if (statusLen > EC.screenColumns)
+	{
+		statusLen = EC.screenColumns;
+	}
+
+	abAppend(ab, status, statusLen);
+
+	for (int i = 0; i < EC.screenColumns - statusLen; ++i)
+	{
+		abAppend(ab, " ", 1);
+	}
+
+	// switch back to normal color
+	abAppend(ab, "\x1b[m", 3);
+}
+
 void editorDrawWelcomeMessage(struct abuf *ab)
 {
 	char welcomeMsg[80];
@@ -616,8 +666,13 @@ void editorRefresh()
 	abAppend(&ab, "\x1b[?25l", 6);
 	abAppend(&ab, "\x1b[H", 3);
 
+	// draw file rows
 	editorDrawRows(&ab);
 
+	// draw status bar
+	editorDrawStatusBar(&ab);
+
+	// draw cursor
 	char buf[32];
 	snprintf(buf, sizeof(buf), "\x1b[%d;%dH", EC.cursorY - EC.rowOffset + 1,
 			 EC.renderX - EC.columnOffset + 1);
@@ -626,6 +681,7 @@ void editorRefresh()
 	// show cursor
 	abAppend(&ab, "\x1b[?25h", 6);
 
+	// render
 	write(STDOUT_FILENO, ab.b, ab.len);
 	abFree(&ab);
 }
@@ -638,6 +694,7 @@ void initEditor()
 	EC.rowOffset = EC.columnOffset = 0;
 	EC.renderX = 0;
 	EC.row = NULL;
+	EC.filename = NULL;
 
 	if (getWindowSize(&EC.screenRows, &EC.screenColumns) == -1)
 		terminate("[Error] getWindowSize");
