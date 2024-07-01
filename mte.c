@@ -6,12 +6,14 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/param.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 /*** defines ***/
@@ -48,7 +50,10 @@ struct EditorContext
 	int cursorX, cursorY, cursorXS;
 	int renderX;
 	int numRows;
+	int messageLifeTime;
 	char *filename;
+	char statusMsg[80];
+	time_t statusMsgTime;
 	EditorRow *row;
 	struct termios oldtio;
 } EC;
@@ -576,29 +581,40 @@ void editorScroll()
 	}
 }
 
+void editorDrawMessageBar(struct abuf *ab)
+{
+	abAppend(ab, "\x1b[K", 3);
+	int msgLen = strlen(EC.statusMsg);
+	if (msgLen > EC.screenColumns)
+		msgLen = EC.screenColumns;
+	if (msgLen && time(NULL) - EC.statusMsgTime < EC.messageLifeTime)
+		abAppend(ab, EC.statusMsg, msgLen);
+}
+
 void editorDrawStatusBar(struct abuf *ab)
 {
 	// switch to inverted color
 	abAppend(ab, "\x1b[7m", 4);
 
-	char status[80];
+	char status[80], rstatus[80];
 	int statusLen = snprintf(status, sizeof(status), "%.20s - %d lines",
 							 EC.filename ? EC.filename : "[Unamed]", EC.numRows);
-
+	int rstatusLen = snprintf(rstatus, sizeof(rstatus), "%d/%d", EC.cursorY + 1, EC.numRows);
 	if (statusLen > EC.screenColumns)
 	{
 		statusLen = EC.screenColumns;
 	}
-
 	abAppend(ab, status, statusLen);
 
-	for (int i = 0; i < EC.screenColumns - statusLen; ++i)
+	for (int i = 0; i < EC.screenColumns - statusLen - rstatusLen; ++i)
 	{
 		abAppend(ab, " ", 1);
 	}
+	abAppend(ab, rstatus, rstatusLen);
 
 	// switch back to normal color
 	abAppend(ab, "\x1b[m", 3);
+	abAppend(ab, "\r\n", 2);
 }
 
 void editorDrawWelcomeMessage(struct abuf *ab)
@@ -656,6 +672,16 @@ void editorDrawRows(struct abuf *ab)
 	}
 }
 
+// variadic function
+void editorSetStatusMessage(const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(EC.statusMsg, sizeof(EC.statusMsg), fmt, ap);
+	va_end(ap);
+	EC.statusMsgTime = time(NULL);
+}
+
 void editorRefresh()
 {
 	editorScroll();
@@ -671,6 +697,9 @@ void editorRefresh()
 
 	// draw status bar
 	editorDrawStatusBar(&ab);
+
+	// draw message bar
+	editorDrawMessageBar(&ab);
 
 	// draw cursor
 	char buf[32];
@@ -695,12 +724,15 @@ void initEditor()
 	EC.renderX = 0;
 	EC.row = NULL;
 	EC.filename = NULL;
+	EC.statusMsg[0] = '\0';
+	EC.statusMsgTime = 0;
+	EC.messageLifeTime = 5;
 
 	if (getWindowSize(&EC.screenRows, &EC.screenColumns) == -1)
 		terminate("[Error] getWindowSize");
 
 	// reserve line for status menu
-	EC.screenRows -= 1;
+	EC.screenRows -= 2;
 }
 
 int main(int argc, char *argv[])
@@ -709,6 +741,8 @@ int main(int argc, char *argv[])
 	initEditor();
 	if (argc >= 2)
 		editorOpen(argv[1]);
+
+	editorSetStatusMessage("HELP: Ctrl-Q = quit");
 
 	while (1)
 	{
