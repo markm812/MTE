@@ -449,12 +449,12 @@ void editorMoveCursor(int direction)
 	}
 
 	// snap to the last char before the tab char on vertical line changes
-	// new cursorX is at most the old cursorX
 	if (direction == ARROW_DOWN || direction == ARROW_UP)
 	{
 		// back to the last cursor X before the snapping
-		EC.cursorX = MAX(EC.cursorX, EC.cursorXS);
-
+		// EC.cursorX = MAX(EC.cursorX, EC.cursorXS);
+		EC.cursorX = EC.cursorXS;
+		// new cursorX is at most the old cursorX
 		EC.cursorX = editorRealCursorXOnLineWithTabs(&EC.row[EC.cursorY], EC.cursorX);
 	}
 
@@ -601,8 +601,8 @@ void editorDrawRows(struct abuf *ab)
 
 		// clear line end & append next line
 		abAppend(ab, "\x1b[K", 3);
-		if (y < EC.screenRows - 1)
-			abAppend(ab, "\r\n", 2);
+		// if (y < EC.screenRows - 1)
+		abAppend(ab, "\r\n", 2);
 	}
 }
 
@@ -641,6 +641,9 @@ void initEditor()
 
 	if (getWindowSize(&EC.screenRows, &EC.screenColumns) == -1)
 		terminate("[Error] getWindowSize");
+
+	// reserve line for status menu
+	EC.screenRows -= 1;
 }
 
 int main(int argc, char *argv[])
