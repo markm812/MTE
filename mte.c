@@ -5,6 +5,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -23,6 +24,7 @@
 
 enum EditorKey
 {
+	BACKSPACE = 127,
 	ARROW_LEFT = 1001,
 	ARROW_RIGHT,
 	ARROW_UP,
@@ -57,6 +59,8 @@ struct EditorContext
 	EditorRow *row;
 	struct termios oldtio;
 } EC;
+
+void editorSetStatusMessage(const char *fmt, ...);
 
 /*** terminal ***/
 void releaseMemory()
@@ -263,6 +267,7 @@ int editorRowCursorXToRenderX(EditorRow *row, int cursorX)
 	return renderX;
 }
 
+// updates the rendered representation of a row of text in the editor.
 void editorUpdateRow(EditorRow *row)
 {
 	int tabs = 0;
@@ -275,22 +280,22 @@ void editorUpdateRow(EditorRow *row)
 	// each tab is 8 chars so +7 per tab
 	row->render = malloc(row->size + tabs * (TAB_STOP - 1) + 1);
 
-	int idx = 0;
+	int at = 0;
 	for (j = 0; j < row->size; j++)
 	{
 		if (row->chars[j] == '\t')
 		{
-			row->render[idx++] = ' ';
-			while (idx % TAB_STOP != 0)
-				row->render[idx++] = ' ';
+			row->render[at++] = ' ';
+			while (at % TAB_STOP != 0)
+				row->render[at++] = ' ';
 		}
 		else
 		{
-			row->render[idx++] = row->chars[j];
+			row->render[at++] = row->chars[j];
 		}
 	}
-	row->render[idx] = '\0';
-	row->rsize = idx;
+	row->render[at] = '\0';
+	row->rsize = at;
 }
 
 void editorAppendRow(char *s, size_t len)
@@ -310,7 +315,54 @@ void editorAppendRow(char *s, size_t len)
 	EC.numRows++;
 }
 
+void editorRowInsertChar(EditorRow *row, int at, int c)
+{
+	if (at < 0 || at > row->size)
+		at = row->size;
+	// 1 byte for new char, 1 more for null byte
+	row->chars = realloc(row->chars, row->size + 2);
+	memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
+	row->size++;
+	row->chars[at] = c;
+	editorUpdateRow(row);
+}
+
+/*** editor operations ***/
+void editorInsertChar(int c)
+{
+	if (EC.cursorY == EC.numRows)
+	{
+		editorAppendRow("", 0);
+	}
+	editorRowInsertChar(&EC.row[EC.cursorY], EC.cursorX, c);
+	EC.cursorX++;
+}
+
 /*** file IO ***/
+char *editorRowsToString(int *buflen)
+{
+	int totalLength = 0;
+
+	for (int i = 0; i < EC.numRows; i++)
+	{
+		totalLength += EC.row[i].size + 1;
+	}
+
+	char *buffer = (char *)malloc(totalLength + 1); // Add one for the null-terminator
+	char *p = buffer;
+	for (int i = 0; i < EC.numRows; i++)
+	{
+		memcpy(p, EC.row[i].chars, EC.row[i].size);
+		p += EC.row[i].size;
+		*p++ = '\n';
+	}
+	*p = '\0';
+
+	*buflen = totalLength;
+
+	return buffer;
+}
+
 void editorOpen(const char *filename)
 {
 	free(EC.filename);
@@ -337,6 +389,45 @@ void editorOpen(const char *filename)
 	}
 	free(line);
 	fclose(fp);
+}
+
+int editorSave()
+{
+	if (EC.filename == NULL)
+		return 1;
+
+	int bufferLength;
+	char *buf = editorRowsToString(&bufferLength);
+
+	int fd = open(EC.filename, O_RDWR | O_CREAT, 0644);
+	if (fd == -1)
+	{
+		goto writeerr;
+	}
+
+	if (ftruncate(fd, bufferLength) == -1)
+	{
+		goto writeerr;
+	}
+
+	if (write(fd, buf, bufferLength) == -1)
+	{
+		goto writeerr;
+	}
+
+	close(fd);
+	free(buf);
+	editorSetStatusMessage("%d bytes written to disk (%s)", bufferLength, EC.filename);
+	return 0;
+
+writeerr:
+	free(buf);
+	if (fd != -1)
+	{
+		close(fd);
+	}
+	editorSetStatusMessage("Can't save! I/O error: %s", strerror(errno));
+	return 1;
 }
 
 /*** buffer append ***/
@@ -482,7 +573,6 @@ void editorMoveCursor(int direction)
 	if (direction == ARROW_DOWN || direction == ARROW_UP)
 	{
 		// back to the last cursor X before the snapping
-		// EC.cursorX = MAX(EC.cursorX, EC.cursorXS);
 		EC.cursorX = EC.cursorXS;
 		// new cursorX is at most the old cursorX
 		EC.cursorX = editorRealCursorXOnLineWithTabs(&EC.row[EC.cursorY], EC.cursorX);
@@ -502,6 +592,9 @@ void editorProcessKeyEvent()
 	{
 	case CTRL_KEY('q'):
 		editorExit();
+		break;
+	case CTRL_KEY('s'):
+		editorSave();
 		break;
 	case ARROW_UP:
 	case ARROW_DOWN:
@@ -537,12 +630,10 @@ void editorProcessKeyEvent()
 	case HOME_KEY:
 		EC.cursorX = 0;
 		EC.cursorXS = EC.cursorX;
-		// editorRefreshCursor();
 		break;
 	case END_KEY:
 		EC.cursorX = EC.row[EC.cursorY].size;
 		EC.cursorXS = EC.cursorX;
-		// editorRefreshCursor();
 		break;
 	case CTRL_KEY('d'):
 	{
@@ -551,6 +642,21 @@ void editorProcessKeyEvent()
 		fclose(fp);
 	}
 	break;
+	case '\r':
+		/* unimplemented */
+		break;
+	case BACKSPACE:
+	case CTRL_KEY('h'):
+	case DEL_KEY:
+		/* unimplemented */
+		break;
+	case CTRL_KEY('l'):
+	case '\x1b':
+		/* unimplemented */
+		break;
+	default:
+		editorInsertChar(key);
+		break;
 	}
 }
 
@@ -742,7 +848,7 @@ int main(int argc, char *argv[])
 	if (argc >= 2)
 		editorOpen(argv[1]);
 
-	editorSetStatusMessage("HELP: Ctrl-Q = quit");
+	editorSetStatusMessage("KEY: Ctrl-Q = quit | Ctrl-S = save");
 
 	while (1)
 	{
