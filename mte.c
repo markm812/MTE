@@ -64,7 +64,7 @@ struct EditorContext
 
 /*** function prototypes ***/
 void editorSetStatusMessage(const char *fmt, ...);
-
+void throwErrorLog(const char *fmt, ...);
 /*** terminal ***/
 void releaseMemory()
 {
@@ -82,8 +82,8 @@ void releaseMemory()
 
 void terminate(const char *s)
 {
-	write(STDOUT_FILENO, "\x1b[2J", 4);
-	write(STDOUT_FILENO, "\x1b[H", 3);
+	(void)!write(STDOUT_FILENO, "\x1b[2J", 4);
+	(void)!write(STDOUT_FILENO, "\x1b[H", 3);
 	perror(s);
 	releaseMemory();
 	exit(1);
@@ -198,8 +198,8 @@ int editorReadKey()
 
 void editorExit()
 {
-	write(STDOUT_FILENO, "\x1b[2J", 4);
-	write(STDOUT_FILENO, "\x1b[H", 3);
+	(void)!write(STDOUT_FILENO, "\x1b[2J", 4);
+	(void)!write(STDOUT_FILENO, "\x1b[H", 3);
 	releaseMemory();
 	exit(0);
 }
@@ -348,6 +348,16 @@ void editorRowInsertChar(EditorRow *row, int at, int c)
 	EC.dirty++;
 }
 
+void editorRowDelChar(EditorRow *row, int at)
+{
+	if (at < 0 || at >= row->size)
+		return;
+	memmove(&row->chars[at], &row->chars[at + 1], row->size - at);
+	row->size--;
+	editorUpdateRow(row);
+	EC.dirty++;
+}
+
 /*** editor operations ***/
 void editorInsertChar(int c)
 {
@@ -357,6 +367,33 @@ void editorInsertChar(int c)
 	}
 	editorRowInsertChar(&EC.row[EC.cursorY], EC.cursorX, c);
 	EC.cursorX++;
+}
+
+void editorDelChar()
+{
+	if (EC.cursorY == EC.numRows)
+	{
+		return;
+	}
+
+	EditorRow *currentRow = &EC.row[EC.cursorY];
+
+	// Check if the cursor is at the beginning of the line
+	if (EC.cursorX == 0)
+	{
+		if (EC.cursorY > 0)
+		{
+			// TODO: append current row to the end of previous row
+			// EC.cursorX = EC.row[EC.cursorY - 1].size;
+			// EC.cursorXS = editorRowCursorXToRenderX(&EC.row[EC.cursorY - 1], EC.cursorX);
+		}
+	}
+	else
+	{
+		editorRowDelChar(currentRow, EC.cursorX - 1);
+		EC.cursorX--;
+		EC.cursorXS = editorRowCursorXToRenderX(currentRow, EC.cursorX);
+	}
 }
 
 /*** file IO ***/
@@ -684,8 +721,14 @@ void editorProcessKeyEvent()
 	case BACKSPACE:
 	case CTRL_KEY('h'):
 	case DEL_KEY:
-		/* unimplemented */
-		break;
+	{
+		if (key == DEL_KEY)
+		{
+			editorMoveCursor(ARROW_RIGHT);
+		}
+		editorDelChar();
+	}
+	break;
 	case CTRL_KEY('l'):
 	case '\x1b':
 		/* unimplemented */
@@ -825,6 +868,21 @@ void editorSetStatusMessage(const char *fmt, ...)
 	EC.statusMsgTime = time(NULL);
 }
 
+void throwErrorLog(const char *fmt, ...)
+{
+
+	FILE *fp = fopen("error.log", "a+");
+	if (!fp)
+	{
+		return;
+	}
+	va_list ap;
+	va_start(ap, fmt);
+	fprintf(fp, fmt, ap);
+	va_end(ap);
+	fclose(fp);
+}
+
 void editorRefresh()
 {
 	editorScroll();
@@ -854,7 +912,7 @@ void editorRefresh()
 	abAppend(&ab, "\x1b[?25h", 6);
 
 	// render
-	write(STDOUT_FILENO, ab.b, ab.len);
+	(void)!write(STDOUT_FILENO, ab.b, ab.len);
 	abFree(&ab);
 }
 
