@@ -67,10 +67,7 @@ void editorSetStatusMessage(const char *fmt, ...);
 /*** terminal ***/
 void releaseMemory()
 {
-	if (EC.filename)
-	{
-		free(EC.filename);
-	}
+	free(EC.filename);
 	if (EC.row)
 	{
 		for (int i = 0; i < EC.numRows; ++i)
@@ -281,7 +278,10 @@ void editorUpdateRow(EditorRow *row)
 	free(row->render);
 	// each tab is 8 chars so +7 per tab
 	row->render = malloc(row->size + tabs * (TAB_STOP - 1) + 1);
-
+	if (!row->render)
+	{
+		terminate("[error] malloc");
+	}
 	int at = 0;
 	for (j = 0; j < row->size; j++)
 	{
@@ -302,11 +302,22 @@ void editorUpdateRow(EditorRow *row)
 
 void editorAppendRow(char *s, size_t len)
 {
-	EC.row = realloc(EC.row, sizeof(EditorRow) * (EC.numRows + 1));
+	EditorRow *newPtr = realloc(EC.row, sizeof(EditorRow) * (EC.numRows + 1));
+	if (!newPtr)
+	{
+		terminate("[error] realloc");
+	}
+	EC.row = newPtr;
 
 	int at = EC.numRows;
-	EC.row[at].size = len;
 	EC.row[at].chars = malloc(len + 1);
+	if (!EC.row[at].chars)
+	{
+		terminate("[error] malloc");
+	}
+	EC.row[at].size = len;
+
+	// strcpy stops at null byte, use memcpy instead
 	memcpy(EC.row[at].chars, s, len);
 	EC.row[at].chars[len] = '\0';
 
@@ -323,7 +334,12 @@ void editorRowInsertChar(EditorRow *row, int at, int c)
 	if (at < 0 || at > row->size)
 		at = row->size;
 	// 1 byte for new char, 1 more for null byte
-	row->chars = realloc(row->chars, row->size + 2);
+	char *newPtr = realloc(row->chars, row->size + 2);
+	if (!newPtr)
+	{
+		terminate("[error] realloc");
+	}
+	row->chars = newPtr;
 	memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
 	row->size++;
 	row->chars[at] = c;
@@ -352,7 +368,7 @@ char *editorRowsToString(int *buflen)
 		totalLength += EC.row[i].size + 1;
 	}
 
-	char *buffer = (char *)malloc(totalLength + 1); // Add one for the null-terminator
+	char *buffer = malloc(totalLength + 1); // Add one for the null-terminator
 	char *p = buffer;
 	for (int i = 0; i < EC.numRows; i++)
 	{
@@ -452,7 +468,7 @@ struct abuf
 void abAppend(struct abuf *ab, const char *s, int len)
 {
 	char *newBuf = realloc(ab->b, ab->len + len);
-	if (newBuf == NULL)
+	if (!newBuf)
 		return;
 
 	memcpy(&newBuf[ab->len], s, len);
