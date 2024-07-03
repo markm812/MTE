@@ -1,18 +1,17 @@
 1234567890
 123456
 12345678
-1234
+12345678901234567890
 1234567890
-
+1234567789010202
 this is a test sentence!
 this is not a test sentence.
 I am sentence no.3;
 sentence 4
 bla bla bla
-This	is	tab	power
-
+This	is	tab power
+This has two		tabs
 Behold. This is a super long long long long sentence that has the length exceeded the screen columns size. You cannot see the full line unless you can do a horizontal scrolling.
-
 New paragraph!
 .
 .
@@ -20,7 +19,7 @@ New paragraph!
 .
 .
 .
-
+.
 .!//*-*(&()*YHIhkjF$%^SE$DF#$@
 .
 
@@ -28,8 +27,47 @@ New paragraph!
 %
 %~
 %%
+[a	90000 --=\\a]
 a
 b
 c
 d
+e
+f
+g
+h
+i
+fgkgj[][a]	[][	]
 ++++++++++++
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
