@@ -550,14 +550,12 @@ struct abuf
 void abAppend(struct abuf *ab, const char *s, int len)
 {
 	char *newBuf = realloc(ab->b, ab->len + len);
-	if (!newBuf)
+	if (newBuf)
 	{
-		return;
+		memcpy(&newBuf[ab->len], s, len);
+		ab->b = newBuf;
+		ab->len += len;
 	}
-
-	memcpy(&newBuf[ab->len], s, len);
-	ab->b = newBuf;
-	ab->len += len;
 }
 
 void abFree(struct abuf *ab)
@@ -566,20 +564,29 @@ void abFree(struct abuf *ab)
 }
 
 /*** input ***/
-int editorRealCursorXOnLineWithTabs(EditorRow *row, int cursorX)
+int editorCalculateRealCursorX(const EditorRow *row, int cursorX)
 {
-	int realX = 0;
-	int j;
-	for (j = 0; j < cursorX; ++j)
+	int realCursorX = 0;
+
+	for (int i = 0; i < cursorX; i++)
 	{
-		realX += (row->chars[j] == '\t') ? (TAB_STOP - (realX % TAB_STOP)) : 1;
-		if (realX > cursorX)
+		if (row->chars[i] == '\t')
 		{
-			realX = j;
+			realCursorX += (TAB_STOP - (realCursorX % TAB_STOP));
+		}
+		else
+		{
+			realCursorX++;
+		}
+
+		if (realCursorX > cursorX)
+		{
+			realCursorX = i;
 			break;
 		}
 	}
-	return realX;
+
+	return realCursorX;
 }
 
 void editorMoveCursorLeft()
@@ -657,7 +664,7 @@ void editorRefreshCursor()
 	}
 
 	EC.cursorXS = EC.cursorX;
-	EC.cursorX = editorRealCursorXOnLineWithTabs(&EC.row[EC.cursorY], EC.cursorX);
+	EC.cursorX = editorCalculateRealCursorX(&EC.row[EC.cursorY], EC.cursorX);
 }
 
 void editorMoveCursor(int direction)
@@ -684,7 +691,7 @@ void editorMoveCursor(int direction)
 		// back to the last cursor X before the snapping
 		EC.cursorX = EC.cursorXS;
 		// new cursorX is at most the old cursorX
-		EC.cursorX = editorRealCursorXOnLineWithTabs(&EC.row[EC.cursorY], EC.cursorX);
+		EC.cursorX = editorCalculateRealCursorX(&EC.row[EC.cursorY], EC.cursorX);
 	}
 
 	int rowLen = (EC.cursorY >= EC.numRows) ? 0 : EC.row[EC.cursorY].size;
