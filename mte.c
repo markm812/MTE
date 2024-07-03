@@ -65,6 +65,8 @@ struct EditorContext
 /*** function prototypes ***/
 void editorSetStatusMessage(const char *fmt, ...);
 void throwErrorLog(const char *fmt, ...);
+void editorFreeRow(EditorRow *row);
+
 /*** terminal ***/
 void releaseMemory()
 {
@@ -73,8 +75,7 @@ void releaseMemory()
 	{
 		for (int i = 0; i < EC.numRows; ++i)
 		{
-			free(EC.row[i].chars);
-			free(EC.row[i].render);
+			editorFreeRow(&EC.row[i]);
 		}
 		free(EC.row);
 	}
@@ -330,10 +331,42 @@ void editorAppendRow(char *s, size_t len)
 	EC.numRows++;
 }
 
+void editorFreeRow(EditorRow *row)
+{
+	free(row->render);
+	free(row->chars);
+}
+
+void editorDelRow(int at)
+{
+	if (at < 0 || at >= EC.numRows)
+	{
+		return;
+	}
+	editorFreeRow(&EC.row[at]);
+	memmove(&EC.row[at], &EC.row[at + 1], sizeof(EditorRow) * (EC.numRows - at - 1));
+	EC.numRows--;
+	EC.dirty++;
+}
+
+void editorRowAppendString(EditorRow *row, const char *s, size_t len)
+{
+	row->chars = realloc(row->chars, row->size + len + 1);
+	memcpy(row->chars + row->size, s, len);
+
+	row->size += len;
+	row->chars[row->size] = '\0';
+
+	editorUpdateRow(row);
+	EC.dirty++;
+}
+
 void editorRowInsertChar(EditorRow *row, int at, int c)
 {
 	if (at < 0 || at > row->size)
+	{
 		at = row->size;
+	}
 	// 1 byte for new char, 1 more for null byte
 	char *newPtr = realloc(row->chars, row->size + 2);
 	if (!newPtr)
@@ -351,7 +384,9 @@ void editorRowInsertChar(EditorRow *row, int at, int c)
 void editorRowDelChar(EditorRow *row, int at)
 {
 	if (at < 0 || at >= row->size)
+	{
 		return;
+	}
 	memmove(&row->chars[at], &row->chars[at + 1], row->size - at);
 	row->size--;
 	editorUpdateRow(row);
@@ -378,22 +413,24 @@ void editorDelChar()
 
 	EditorRow *currentRow = &EC.row[EC.cursorY];
 
-	// Check if the cursor is at the beginning of the line
-	if (EC.cursorX == 0)
-	{
-		if (EC.cursorY > 0)
-		{
-			// TODO: append current row to the end of previous row
-			// EC.cursorX = EC.row[EC.cursorY - 1].size;
-			// EC.cursorXS = editorRowCursorXToRenderX(&EC.row[EC.cursorY - 1], EC.cursorX);
-		}
-	}
-	else
+	if (EC.cursorX > 0)
 	{
 		editorRowDelChar(currentRow, EC.cursorX - 1);
 		EC.cursorX--;
 		EC.cursorXS = editorRowCursorXToRenderX(currentRow, EC.cursorX);
+		return;
 	}
+
+	if (EC.cursorY == 0)
+	{
+		return;
+	}
+
+	EC.cursorX = EC.row[EC.cursorY - 1].size;
+	editorRowAppendString(&EC.row[EC.cursorY - 1], currentRow->chars, currentRow->size);
+	editorDelRow(EC.cursorY);
+	EC.cursorY--;
+	EC.cursorXS = editorRowCursorXToRenderX(&EC.row[EC.cursorY], EC.cursorX);
 }
 
 /*** file IO ***/
@@ -427,11 +464,15 @@ void editorOpen(const char *filename)
 	size_t fnlen = strlen(filename) + 1;
 	EC.filename = malloc(fnlen);
 	if (EC.filename)
+	{
 		memcpy(EC.filename, filename, fnlen);
+	}
 
 	FILE *fp = fopen(filename, "r");
 	if (!fp)
+	{
 		terminate("[Error] fopen");
+	}
 
 	char *line = NULL;
 	ssize_t lineLen = 0;
@@ -441,8 +482,9 @@ void editorOpen(const char *filename)
 		// strip next line char
 		while (lineLen > 0 && (line[lineLen - 1] == '\n' ||
 							   line[lineLen - 1] == '\r'))
+		{
 			lineLen--;
-
+		}
 		editorAppendRow(line, lineLen);
 	}
 	EC.dirty = 0;
@@ -454,7 +496,9 @@ void editorOpen(const char *filename)
 int editorSave()
 {
 	if (EC.filename == NULL)
+	{
 		return 1;
+	}
 
 	int bufferLength;
 	char *buf = editorRowsToString(&bufferLength);
@@ -507,7 +551,9 @@ void abAppend(struct abuf *ab, const char *s, int len)
 {
 	char *newBuf = realloc(ab->b, ab->len + len);
 	if (!newBuf)
+	{
 		return;
+	}
 
 	memcpy(&newBuf[ab->len], s, len);
 	ab->b = newBuf;
@@ -553,19 +599,21 @@ void editorMoveCursorLeft()
 
 void editorMoveCursorRight()
 {
-	if (EC.cursorY < EC.numRows)
+	if (EC.cursorY >= EC.numRows)
 	{
-		if (EC.cursorX < EC.row[EC.cursorY].size)
-		{
-			EC.cursorX++;
-			EC.cursorXS = editorRowCursorXToRenderX(&EC.row[EC.cursorY], EC.cursorX);
-			return;
-		}
-
-		EC.cursorY++;
-		EC.cursorX = 0;
-		EC.cursorXS = EC.cursorX;
+		return;
 	}
+
+	if (EC.cursorX < EC.row[EC.cursorY].size)
+	{
+		EC.cursorX++;
+		EC.cursorXS = editorRowCursorXToRenderX(&EC.row[EC.cursorY], EC.cursorX);
+		return;
+	}
+
+	EC.cursorY++;
+	EC.cursorX = 0;
+	EC.cursorXS = EC.cursorX;
 }
 
 void editorMoveCursorUp()
@@ -667,14 +715,18 @@ void editorProcessKeyEvent()
 	}
 	break;
 	case CTRL_KEY('s'):
+	{
 		editorSave();
-		break;
+	}
+	break;
 	case ARROW_UP:
 	case ARROW_DOWN:
 	case ARROW_LEFT:
 	case ARROW_RIGHT:
+	{
 		editorMoveCursor(key);
-		break;
+	}
+	break;
 	case PAGE_UP:
 	case PAGE_DOWN:
 	{
@@ -683,13 +735,17 @@ void editorProcessKeyEvent()
 		{
 			EC.rowOffset -= EC.screenRows;
 			if (EC.rowOffset < 0)
+			{
 				EC.rowOffset = 0;
+			}
 		}
 		else if (key == PAGE_DOWN)
 		{
 			EC.rowOffset += EC.screenRows;
 			if (EC.rowOffset > EC.numRows)
+			{
 				EC.rowOffset = EC.numRows;
+			}
 		}
 
 		/* update cursor position */
@@ -701,13 +757,17 @@ void editorProcessKeyEvent()
 	}
 	break;
 	case HOME_KEY:
+	{
 		EC.cursorX = 0;
 		EC.cursorXS = EC.cursorX;
-		break;
+	}
+	break;
 	case END_KEY:
+	{
 		EC.cursorX = EC.row[EC.cursorY].size;
 		EC.cursorXS = EC.cursorX;
-		break;
+	}
+	break;
 	case CTRL_KEY('d'):
 	{
 		FILE *fp = fopen("log.txt", "a+");
@@ -772,9 +832,13 @@ void editorDrawMessageBar(struct abuf *ab)
 	abAppend(ab, "\x1b[K", 3);
 	int msgLen = strlen(EC.statusMsg);
 	if (msgLen > EC.screenColumns)
+	{
 		msgLen = EC.screenColumns;
+	}
 	if (msgLen && time(NULL) - EC.statusMsgTime < EC.messageLifeTime)
+	{
 		abAppend(ab, EC.statusMsg, msgLen);
+	}
 }
 
 void editorDrawStatusBar(struct abuf *ab)
@@ -809,7 +873,9 @@ void editorDrawWelcomeMessage(struct abuf *ab)
 	int msgLen = snprintf(welcomeMsg, sizeof(welcomeMsg),
 						  "Mimic Text Editor -- version %s", MTE_VERSION);
 	if (msgLen > EC.screenColumns)
+	{
 		msgLen = EC.screenColumns;
+	}
 
 	int padding = (EC.screenColumns - msgLen) / 2;
 	if (padding)
@@ -819,7 +885,9 @@ void editorDrawWelcomeMessage(struct abuf *ab)
 	}
 
 	while (padding--)
+	{
 		abAppend(ab, " ", 1);
+	}
 
 	abAppend(ab, welcomeMsg, msgLen);
 }
@@ -845,9 +913,13 @@ void editorDrawRows(struct abuf *ab)
 		{
 			int len = EC.row[rowIndex].rsize - EC.columnOffset;
 			if (len < 0)
+			{
 				len = 0;
+			}
 			if (len > EC.screenColumns)
+			{
 				len = EC.screenColumns;
+			}
 			abAppend(ab, &EC.row[rowIndex].render[EC.columnOffset], len);
 		}
 
@@ -872,15 +944,14 @@ void throwErrorLog(const char *fmt, ...)
 {
 
 	FILE *fp = fopen("error.log", "a+");
-	if (!fp)
+	if (fp)
 	{
-		return;
+		va_list ap;
+		va_start(ap, fmt);
+		fprintf(fp, fmt, ap);
+		va_end(ap);
+		fclose(fp);
 	}
-	va_list ap;
-	va_start(ap, fmt);
-	fprintf(fp, fmt, ap);
-	va_end(ap);
-	fclose(fp);
 }
 
 void editorRefresh()
@@ -942,7 +1013,9 @@ int main(int argc, char *argv[])
 	enableRawMode();
 	initEditor();
 	if (argc >= 2)
+	{
 		editorOpen(argv[1]);
+	}
 
 	editorSetStatusMessage("KEY: Ctrl-Q = quit | Ctrl-S = save");
 
