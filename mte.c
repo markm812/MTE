@@ -21,6 +21,7 @@
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define MTE_VERSION "0.0.1"
 #define TAB_STOP 8
+#define KILO_QUIT_TIMES 1
 
 enum EditorKey
 {
@@ -610,12 +611,24 @@ void editorMoveCursor(int direction)
 
 void editorProcessKeyEvent()
 {
+	static int quitTimes = KILO_QUIT_TIMES;
+
 	int key = editorReadKey();
 	switch (key)
 	{
 	case CTRL_KEY('q'):
+	{
+		if (EC.dirty && quitTimes > 0)
+		{
+			editorSetStatusMessage("Discard unsaved buffer? Press "
+								   "Ctrl-Q %d more times to quit.",
+								   quitTimes);
+			quitTimes--;
+			return;
+		}
 		editorExit();
-		break;
+	}
+	break;
 	case CTRL_KEY('s'):
 		editorSave();
 		break;
@@ -681,6 +694,7 @@ void editorProcessKeyEvent()
 		editorInsertChar(key);
 		break;
 	}
+	quitTimes = KILO_QUIT_TIMES;
 }
 
 /*** output ***/
