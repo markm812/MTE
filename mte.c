@@ -302,30 +302,33 @@ void editorUpdateRow(EditorRow *row)
 	row->rsize = at;
 }
 
-void editorAppendRow(char *s, size_t len)
+void editorInsertRow(int at, char *s, size_t len)
 {
-	EditorRow *newPtr = realloc(EC.row, sizeof(EditorRow) * (EC.numRows + 1));
-	if (!newPtr)
+	if (at < 0 || at > EC.numRows)
+	{
+		return;
+	}
+	EC.row = realloc(EC.row, sizeof(EditorRow) * (EC.numRows + 1));
+	if (!EC.row)
 	{
 		terminate("[error] realloc");
 	}
-	EC.row = newPtr;
+	memmove(&EC.row[at + 1], &EC.row[at], sizeof(EditorRow) * (EC.numRows - at));
 
-	int at = EC.numRows;
-	EC.row[at].chars = malloc(len + 1);
-	if (!EC.row[at].chars)
+	EditorRow *newRow = &EC.row[at];
+	newRow->chars = malloc(len + 1);
+	if (!newRow->chars)
 	{
 		terminate("[error] malloc");
 	}
-	EC.row[at].size = len;
 
 	// strcpy stops at null byte, use memcpy instead
-	memcpy(EC.row[at].chars, s, len);
-	EC.row[at].chars[len] = '\0';
-
-	EC.row[at].rsize = 0;
-	EC.row[at].render = NULL;
-	editorUpdateRow(&EC.row[at]);
+	memcpy(newRow->chars, s, len);
+	newRow->chars[len] = '\0';
+	newRow->size = len;
+	newRow->rsize = 0;
+	newRow->render = NULL;
+	editorUpdateRow(newRow);
 
 	EC.dirty++;
 	EC.numRows++;
@@ -381,6 +384,28 @@ void editorRowInsertChar(EditorRow *row, int at, int c)
 	EC.dirty++;
 }
 
+void editorInsertNewline()
+{
+	if (EC.cursorX == 0)
+	{
+		editorInsertRow(EC.cursorY, "", 0);
+	}
+	else
+	{
+		EditorRow *currentRow = &EC.row[EC.cursorY];
+		size_t newRowLength = currentRow->size - EC.cursorX;
+		editorInsertRow(EC.cursorY + 1, &currentRow->chars[EC.cursorX], newRowLength);
+
+		currentRow = &EC.row[EC.cursorY];
+		currentRow->size = EC.cursorX;
+		currentRow->chars[currentRow->size] = '\0';
+
+		editorUpdateRow(currentRow);
+	}
+	EC.cursorY++;
+	EC.cursorX = EC.cursorXS = 0;
+}
+
 void editorRowDelChar(EditorRow *row, int at)
 {
 	if (at < 0 || at >= row->size)
@@ -398,7 +423,7 @@ void editorInsertChar(int c)
 {
 	if (EC.cursorY == EC.numRows)
 	{
-		editorAppendRow("", 0);
+		editorInsertRow(EC.numRows, "", 0);
 	}
 	editorRowInsertChar(&EC.row[EC.cursorY], EC.cursorX, c);
 	EC.cursorX++;
@@ -485,7 +510,7 @@ void editorOpen(const char *filename)
 		{
 			lineLen--;
 		}
-		editorAppendRow(line, lineLen);
+		editorInsertRow(EC.numRows, line, lineLen);
 	}
 	EC.dirty = 0;
 	free(line);
@@ -783,7 +808,7 @@ void editorProcessKeyEvent()
 	}
 	break;
 	case '\r':
-		/* unimplemented */
+		editorInsertNewline();
 		break;
 	case BACKSPACE:
 	case CTRL_KEY('h'):
