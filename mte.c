@@ -22,6 +22,8 @@
 #define MTE_VERSION "0.0.1"
 #define TAB_STOP 8
 #define KILO_QUIT_TIMES 1
+#define ESC_KEY '\x1b'
+#define ENTER_KEY '\r'
 
 enum EditorKey
 {
@@ -66,6 +68,8 @@ struct EditorContext
 void editorSetStatusMessage(const char *fmt, ...);
 void throwErrorLog(const char *fmt, ...);
 void editorFreeRow(EditorRow *row);
+void editorRefresh();
+char *editorPrompt(const char *prompt);
 
 /*** terminal ***/
 void releaseMemory()
@@ -127,21 +131,21 @@ int editorReadKey()
 	}
 
 	// ESC keys
-	if (c == '\x1b')
+	if (c == ESC_KEY)
 	{
 		char seq[3];
 
 		if (read(STDIN_FILENO, &seq[0], 1) != 1)
-			return '\x1b';
+			return ESC_KEY;
 		if (read(STDIN_FILENO, &seq[1], 1) != 1)
-			return '\x1b';
+			return ESC_KEY;
 
 		if (seq[0] == '[')
 		{
 			if (seq[1] >= '0' && seq[1] <= '9')
 			{
 				if (read(STDIN_FILENO, &seq[2], 1) != 1)
-					return '\x1b';
+					return ESC_KEY;
 				if (seq[2] == '~')
 				{
 					switch (seq[1])
@@ -192,7 +196,7 @@ int editorReadKey()
 				return HOME_KEY;
 			}
 		}
-		return '\x1b';
+		return ESC_KEY;
 	}
 	return c;
 }
@@ -223,7 +227,7 @@ int getCursorPosition(int *rows, int *cols)
 	}
 	buf[i] = '\0';
 
-	if (buf[0] != '\x1b' || buf[1] != '[')
+	if (buf[0] != ESC_KEY || buf[1] != '[')
 		return -1;
 
 	if (sscanf(&buf[2], "%d;%d", rows, cols) != 2)
@@ -506,7 +510,7 @@ void editorOpen(const char *filename)
 	{
 		// strip next line char
 		while (lineLen > 0 && (line[lineLen - 1] == '\n' ||
-							   line[lineLen - 1] == '\r'))
+							   line[lineLen - 1] == ENTER_KEY))
 		{
 			lineLen--;
 		}
@@ -520,9 +524,14 @@ void editorOpen(const char *filename)
 // TODO: optimize save function to create a temporary file then rename to original filename afterward
 int editorSave()
 {
-	if (EC.filename == NULL)
+	if (!EC.filename)
 	{
-		return 1;
+		EC.filename = editorPrompt("Save as: %s");
+		if (!EC.filename)
+		{
+			editorSetStatusMessage("Cancelled");
+			return 1;
+		}
 	}
 
 	int bufferLength;
@@ -589,6 +598,63 @@ void abFree(struct abuf *ab)
 }
 
 /*** input ***/
+char *editorPrompt(const char *prompt)
+{
+	size_t bufsize = 128;
+	char *buffer = malloc(bufsize);
+	if (!buffer)
+	{
+		terminate("[error] malloc");
+	}
+
+	size_t buflen = 0;
+	buffer[0] = '\0';
+
+	while (1)
+	{
+		editorSetStatusMessage(prompt, buffer);
+		editorRefresh();
+
+		int c = editorReadKey();
+		if (c == ESC_KEY || c == CTRL_KEY('c'))
+		{
+			editorSetStatusMessage("");
+			free(buffer);
+			return NULL;
+		}
+
+		if (c == DEL_KEY || c == CTRL_KEY('h') || c == BACKSPACE)
+		{
+			if (buflen)
+			{
+				buffer[--buflen] = '\0';
+			}
+		}
+		else if (c == ENTER_KEY)
+		{
+			if (buflen != 0)
+			{
+				editorSetStatusMessage("");
+				return buffer;
+			}
+		}
+		else if (!iscntrl(c) && c < 128)
+		{
+			if (buflen == bufsize - 1)
+			{
+				bufsize *= 2;
+				buffer = realloc(buffer, bufsize);
+				if (!buffer)
+				{
+					terminate("[error] realloc");
+				}
+			}
+			buffer[buflen++] = c;
+			buffer[buflen] = '\0';
+		}
+	}
+}
+
 int editorCalculateRealCursorX(const EditorRow *row, int cursorX)
 {
 	int realCursorX = 0;
@@ -807,7 +873,7 @@ void editorProcessKeyEvent()
 		fclose(fp);
 	}
 	break;
-	case '\r':
+	case ENTER_KEY:
 		editorInsertNewline();
 		break;
 	case BACKSPACE:
@@ -822,7 +888,7 @@ void editorProcessKeyEvent()
 	}
 	break;
 	case CTRL_KEY('l'):
-	case '\x1b':
+	case ESC_KEY:
 		/* unimplemented */
 		break;
 	default:
