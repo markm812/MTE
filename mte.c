@@ -597,11 +597,21 @@ void editorSearchCallback(char *pattern, int key)
 
 void editorSearch()
 {
+	int originCursorX = EC.cursorX, originCursorY = EC.cursorY, originCursorXS = EC.cursorXS;
+	int originRowOffset = EC.rowOffset, originColumnOffset = EC.columnOffset;
+
 	char *pattern = editorPrompt("Search: %s (Press ESC to cancel)", editorSearchCallback);
 	if (pattern)
 	{
 		free(pattern);
+		return;
 	}
+
+	EC.cursorX = originCursorX;
+	EC.cursorXS = originCursorXS;
+	EC.cursorY = originCursorY;
+	EC.rowOffset = originRowOffset;
+	EC.columnOffset = originColumnOffset;
 }
 
 /*** buffer append ***/
