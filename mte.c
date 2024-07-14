@@ -521,7 +521,6 @@ void editorOpen(const char *filename)
 	fclose(fp);
 }
 
-// TODO: optimize save function to create a temporary file then rename to original filename afterward
 int editorSave()
 {
 	if (!EC.filename)
