@@ -69,7 +69,7 @@ void editorSetStatusMessage(const char *fmt, ...);
 void throwErrorLog(const char *fmt, ...);
 void editorFreeRow(EditorRow *row);
 void editorRefresh();
-char *editorPrompt(const char *prompt);
+char *editorPrompt(const char *prompt, void (*callback)(char *s, int));
 int editorRenderXToCursorX(const EditorRow *row, int cursorX);
 
 /*** terminal ***/
@@ -526,7 +526,7 @@ int editorSave()
 {
 	if (!EC.filename)
 	{
-		EC.filename = editorPrompt("Save as: %s");
+		EC.filename = editorPrompt("Save as: %s", NULL);
 		if (!EC.filename)
 		{
 			editorSetStatusMessage("Cancelled");
@@ -576,10 +576,9 @@ writeerr:
 }
 
 /* search */
-void editorSearch()
+void editorSearchCallback(char *pattern, int key)
 {
-	char *pattern = editorPrompt("Search: %s (Press ESC to cancel)");
-	if (!pattern)
+	if (key == ENTER_KEY || key == ESC_KEY)
 		return;
 	for (int i = 0; i < EC.numRows; ++i)
 	{
@@ -594,7 +593,15 @@ void editorSearch()
 			break;
 		}
 	}
-	free(pattern);
+}
+
+void editorSearch()
+{
+	char *pattern = editorPrompt("Search: %s (Press ESC to cancel)", editorSearchCallback);
+	if (pattern)
+	{
+		free(pattern);
+	}
 }
 
 /*** buffer append ***/
@@ -628,7 +635,7 @@ void abFree(struct abuf *ab)
 /*** input ***/
 
 // return the buffer entered by the user. Returned buffer needs to be manually free after use.
-char *editorPrompt(const char *prompt)
+char *editorPrompt(const char *prompt, void (*callback)(char *s, int))
 {
 	size_t bufsize = 128;
 	char *buffer = malloc(bufsize);
@@ -649,6 +656,10 @@ char *editorPrompt(const char *prompt)
 		if (c == ESC_KEY || c == CTRL_KEY('c'))
 		{
 			editorSetStatusMessage("");
+			if (callback)
+			{
+				callback(buffer, c);
+			}
 			free(buffer);
 			return NULL;
 		}
@@ -665,6 +676,10 @@ char *editorPrompt(const char *prompt)
 			if (buflen != 0)
 			{
 				editorSetStatusMessage("");
+				if (callback)
+				{
+					callback(buffer, c);
+				}
 				return buffer;
 			}
 		}
@@ -681,6 +696,11 @@ char *editorPrompt(const char *prompt)
 			}
 			buffer[buflen++] = c;
 			buffer[buflen] = '\0';
+		}
+
+		if (callback)
+		{
+			callback(buffer, c);
 		}
 	}
 }
