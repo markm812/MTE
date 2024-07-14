@@ -430,7 +430,7 @@ void editorInsertChar(int c)
 		editorInsertRow(EC.numRows, "", 0);
 	}
 	editorRowInsertChar(&EC.row[EC.cursorY], EC.cursorX, c);
-	EC.cursorX++;
+	EC.cursorXS = ++EC.cursorX;
 }
 
 void editorDelChar()
