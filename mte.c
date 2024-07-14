@@ -534,10 +534,15 @@ int editorSave()
 		}
 	}
 
+	const char *extension = ".tmp";
+	char tmpFilename[128];
+	strcpy(tmpFilename, EC.filename);
+	strncat(tmpFilename, extension, strlen(extension));
+
 	int bufferLength;
 	char *buf = editorRowsToString(&bufferLength);
 
-	int fd = open(EC.filename, O_RDWR | O_CREAT, 0644);
+	int fd = open(tmpFilename, O_RDWR | O_CREAT, 0644);
 	if (fd == -1)
 	{
 		goto writeerr;
@@ -555,6 +560,7 @@ int editorSave()
 
 	close(fd);
 	free(buf);
+	rename(tmpFilename, EC.filename);
 	EC.dirty = 0;
 	editorSetStatusMessage("%d bytes written to disk (%s)", bufferLength, EC.filename);
 	return 0;
