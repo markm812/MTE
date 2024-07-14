@@ -70,6 +70,7 @@ void throwErrorLog(const char *fmt, ...);
 void editorFreeRow(EditorRow *row);
 void editorRefresh();
 char *editorPrompt(const char *prompt);
+int editorRenderXToCursorX(const EditorRow *row, int cursorX);
 
 /*** terminal ***/
 void releaseMemory()
@@ -574,6 +575,28 @@ writeerr:
 	return 1;
 }
 
+/* search */
+void editorSearch()
+{
+	char *pattern = editorPrompt("Search: %s (Press ESC to cancel)");
+	if (!pattern)
+		return;
+	for (int i = 0; i < EC.numRows; ++i)
+	{
+		const EditorRow *row = &EC.row[i];
+		char *match = strstr(row->render, pattern);
+		if (match)
+		{
+			EC.cursorY = i;
+			EC.cursorX = editorRenderXToCursorX(row, match - row->render + strlen(pattern));
+			EC.cursorXS = EC.cursorX;
+			EC.rowOffset = EC.cursorY;
+			break;
+		}
+	}
+	free(pattern);
+}
+
 /*** buffer append ***/
 struct abuf
 {
@@ -603,6 +626,8 @@ void abFree(struct abuf *ab)
 }
 
 /*** input ***/
+
+// return the buffer entered by the user. Returned buffer needs to be manually free after use.
 char *editorPrompt(const char *prompt)
 {
 	size_t bufsize = 128;
@@ -660,7 +685,7 @@ char *editorPrompt(const char *prompt)
 	}
 }
 
-int editorCalculateRealCursorX(const EditorRow *row, int cursorX)
+int editorRenderXToCursorX(const EditorRow *row, int cursorX)
 {
 	int realCursorX = 0;
 
@@ -677,8 +702,7 @@ int editorCalculateRealCursorX(const EditorRow *row, int cursorX)
 
 		if (realCursorX > cursorX)
 		{
-			realCursorX = i;
-			break;
+			return i;
 		}
 	}
 
@@ -760,7 +784,7 @@ void editorRefreshCursor()
 	}
 
 	EC.cursorXS = EC.cursorX;
-	EC.cursorX = editorCalculateRealCursorX(&EC.row[EC.cursorY], EC.cursorX);
+	EC.cursorX = editorRenderXToCursorX(&EC.row[EC.cursorY], EC.cursorX);
 }
 
 void editorMoveCursor(int direction)
@@ -787,7 +811,7 @@ void editorMoveCursor(int direction)
 		// back to the last cursor X before the snapping
 		EC.cursorX = EC.cursorXS;
 		// new cursorX is at most the old cursorX
-		EC.cursorX = editorCalculateRealCursorX(&EC.row[EC.cursorY], EC.cursorX);
+		EC.cursorX = editorRenderXToCursorX(&EC.row[EC.cursorY], EC.cursorX);
 	}
 
 	int rowLen = (EC.cursorY >= EC.numRows) ? 0 : EC.row[EC.cursorY].size;
@@ -895,6 +919,9 @@ void editorProcessKeyEvent()
 	case CTRL_KEY('l'):
 	case ESC_KEY:
 		/* unimplemented */
+		break;
+	case CTRL_KEY('f'):
+		editorSearch();
 		break;
 	default:
 		editorInsertChar(key);
@@ -1120,7 +1147,7 @@ int main(int argc, char *argv[])
 		editorOpen(argv[1]);
 	}
 
-	editorSetStatusMessage("KEY: Ctrl-Q = quit | Ctrl-S = save");
+	editorSetStatusMessage("KEY: Ctrl-Q = quit | Ctrl-S = save | Ctrl-F = search");
 
 	while (1)
 	{
