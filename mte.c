@@ -578,13 +578,15 @@ writeerr:
 /* search */
 void editorSearchCallback(char *pattern, int key)
 {
-	static int lastMatch = -1;
-	static int rollingDirection = 1;
+	static int lastMatchRow = -1;
+	static int lastMatchX = -1;
+	static int direction = 1;
 
 	if (key == ENTER_KEY || key == ESC_KEY)
 	{
-		lastMatch = -1;
-		rollingDirection = 1;
+		lastMatchRow = -1;
+		lastMatchX = -1;
+		direction = 1;
 		return;
 	}
 
@@ -592,22 +594,23 @@ void editorSearchCallback(char *pattern, int key)
 	{
 	case ARROW_UP:
 	case ARROW_LEFT:
-		rollingDirection = -1;
+		direction = -1;
 		break;
 	case ARROW_RIGHT:
 	case ARROW_DOWN:
-		rollingDirection = 1;
+		direction = 1;
 		break;
 	default:
-		lastMatch = -1;
-		rollingDirection = 1;
+		lastMatchRow = -1;
+		lastMatchX = -1;
+		direction = 1;
 		break;
 	}
 
-	int currentLine = lastMatch;
+	int currentLine = MAX(lastMatchRow, 0);
+	int currentX = lastMatchX;
 	for (int done = 0; done < EC.numRows; ++done)
 	{
-		currentLine += rollingDirection;
 		if (currentLine < 0)
 		{
 			currentLine = EC.numRows - 1;
@@ -616,18 +619,42 @@ void editorSearchCallback(char *pattern, int key)
 		{
 			currentLine = 0;
 		}
-		const EditorRow *row = &EC.row[currentLine];
 
-		char *match = strstr(row->render, pattern);
+		const EditorRow *row = &EC.row[currentLine];
+		char *match = NULL;
+		if (direction > 0)
+		{
+			if (currentX == -1)
+				match = strstr(row->render, pattern);
+			else
+				match = strstr(row->render + currentX + 1, pattern);
+		}
+		else
+		{
+			char *lastPossibleMatch = NULL;
+			char *searchStart = row->render;
+			while ((match = strstr(searchStart, pattern)) && (currentX == -1 || (match < row->render + currentX)))
+			{
+				lastPossibleMatch = match;
+				searchStart = match + 1;
+			}
+			match = lastPossibleMatch;
+		}
+
 		if (match)
 		{
-			lastMatch = currentLine;
+			lastMatchRow = currentLine;
 			EC.cursorY = currentLine;
+			EC.rowOffset = currentLine;
+			lastMatchX = match - row->render;
 			EC.cursorX = editorRenderXToCursorX(row, match - row->render + strlen(pattern));
 			EC.cursorXS = EC.cursorX;
-			EC.rowOffset = EC.cursorY;
 			break;
 		}
+
+		lastMatchX = -1;
+		currentX = -1;
+		currentLine += direction;
 	}
 }
 
