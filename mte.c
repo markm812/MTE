@@ -578,15 +578,51 @@ writeerr:
 /* search */
 void editorSearchCallback(char *pattern, int key)
 {
+	static int lastMatch = -1;
+	static int rollingDirection = 1;
+
 	if (key == ENTER_KEY || key == ESC_KEY)
-		return;
-	for (int i = 0; i < EC.numRows; ++i)
 	{
-		const EditorRow *row = &EC.row[i];
+		lastMatch = -1;
+		rollingDirection = 1;
+		return;
+	}
+
+	switch (key)
+	{
+	case ARROW_UP:
+	case ARROW_LEFT:
+		rollingDirection = -1;
+		break;
+	case ARROW_RIGHT:
+	case ARROW_DOWN:
+		rollingDirection = 1;
+		break;
+	default:
+		lastMatch = -1;
+		rollingDirection = 1;
+		break;
+	}
+
+	int currentLine = lastMatch;
+	for (int done = 0; done < EC.numRows; ++done)
+	{
+		currentLine += rollingDirection;
+		if (currentLine < 0)
+		{
+			currentLine = EC.numRows - 1;
+		}
+		else if (currentLine == EC.numRows)
+		{
+			currentLine = 0;
+		}
+		const EditorRow *row = &EC.row[currentLine];
+
 		char *match = strstr(row->render, pattern);
 		if (match)
 		{
-			EC.cursorY = i;
+			lastMatch = currentLine;
+			EC.cursorY = currentLine;
 			EC.cursorX = editorRenderXToCursorX(row, match - row->render + strlen(pattern));
 			EC.cursorXS = EC.cursorX;
 			EC.rowOffset = EC.cursorY;
@@ -600,7 +636,7 @@ void editorSearch()
 	int originCursorX = EC.cursorX, originCursorY = EC.cursorY, originCursorXS = EC.cursorXS;
 	int originRowOffset = EC.rowOffset, originColumnOffset = EC.columnOffset;
 
-	char *pattern = editorPrompt("Search: %s (Press ESC to cancel)", editorSearchCallback);
+	char *pattern = editorPrompt("Search: %s (Press ESC or Ctrl+C to cancel)", editorSearchCallback);
 	if (pattern)
 	{
 		free(pattern);
@@ -623,8 +659,7 @@ struct abuf
 
 #define ABUF_INIT \
 	{             \
-		NULL, 0   \
-	}
+		NULL, 0}
 
 void abAppend(struct abuf *ab, const char *s, int len)
 {
