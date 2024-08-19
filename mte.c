@@ -1304,7 +1304,7 @@ void editorRefresh()
 
 	// draw cursor
 	char buf[32];
-	snprintf(buf, sizeof(buf), "\x1b[%d;%dH", EC.cursorY - EC.rowOffset + 1,
+		snprintf(buf, sizeof(buf), ESC_SEQ("%d;%dH"), EC.cursorY - EC.rowOffset + 1,
 			 EC.renderX - EC.columnOffset + 1);
 	abAppend(&ab, buf, strlen(buf));
 
