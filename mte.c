@@ -23,6 +23,7 @@
 #define TAB_STOP 8
 #define KILO_QUIT_TIMES 1
 #define ESC_KEY '\x1b'
+#define ESC_SEQ(seq) "\x1b[" seq
 #define ENTER_KEY '\r'
 
 enum EditorKey
@@ -88,8 +89,8 @@ void releaseMemory()
 
 void terminate(const char *s)
 {
-	(void)!write(STDOUT_FILENO, "\x1b[2J", 4);
-	(void)!write(STDOUT_FILENO, "\x1b[H", 3);
+	(void)!write(STDOUT_FILENO, ESC_SEQ("2J"), 4);
+	(void)!write(STDOUT_FILENO, ESC_SEQ("H"), 3);
 	perror(s);
 	releaseMemory();
 	exit(1);
@@ -204,15 +205,15 @@ int editorReadKey()
 
 void editorExit()
 {
-	(void)!write(STDOUT_FILENO, "\x1b[2J", 4);
-	(void)!write(STDOUT_FILENO, "\x1b[H", 3);
+	(void)!write(STDOUT_FILENO, ESC_SEQ("2J"), 4);
+	(void)!write(STDOUT_FILENO, ESC_SEQ("H"), 3);
 	releaseMemory();
 	exit(0);
 }
 
 int getCursorPosition(int *rows, int *cols)
 {
-	if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4)
+	if (write(STDOUT_FILENO, ESC_SEQ("6n"), 4) != 4)
 		return -1;
 
 	char buf[32];
@@ -244,10 +245,9 @@ int getWindowSize(int *rows, int *cols)
 	// ioctl will place screen size values into ws on success
 	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0)
 	{
-		if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12)
+		if (write(STDOUT_FILENO, ESC_SEQ("999C")ESC_SEQ("999B"), 12) != 12)
 			return -1;
 		return getCursorPosition(rows, cols);
-		return -1;
 	}
 
 	*rows = ws.ws_row;
@@ -1051,7 +1051,7 @@ void editorScroll()
 
 void editorDrawMessageBar(struct abuf *ab)
 {
-	abAppend(ab, "\x1b[K", 3);
+	abAppend(ab, ESC_SEQ("K"), 3);
 	int msgLen = strlen(EC.statusMsg);
 	if (msgLen > EC.screenColumns)
 	{
@@ -1066,7 +1066,7 @@ void editorDrawMessageBar(struct abuf *ab)
 void editorDrawStatusBar(struct abuf *ab)
 {
 	// switch to inverted color
-	abAppend(ab, "\x1b[7m", 4);
+	abAppend(ab, ESC_SEQ("7m"), 4);
 
 	char status[80], rstatus[80];
 	int statusLen = snprintf(status, sizeof(status), "%.20s - %d lines %s",
@@ -1085,7 +1085,7 @@ void editorDrawStatusBar(struct abuf *ab)
 	abAppend(ab, rstatus, rstatusLen);
 
 	// switch back to normal color
-	abAppend(ab, "\x1b[m", 3);
+	abAppend(ab, ESC_SEQ("m"), 3);
 	abAppend(ab, "\r\n", 2);
 }
 
@@ -1146,7 +1146,7 @@ void editorDrawRows(struct abuf *ab)
 		}
 
 		// clear line end & append next line
-		abAppend(ab, "\x1b[K", 3);
+		abAppend(ab, ESC_SEQ("K"), 3);
 		// if (y < EC.screenRows - 1)
 		abAppend(ab, "\r\n", 2);
 	}
@@ -1183,8 +1183,8 @@ void editorRefresh()
 	struct abuf ab = ABUF_INIT;
 
 	// hide cursor while repainting
-	abAppend(&ab, "\x1b[?25l", 6);
-	abAppend(&ab, "\x1b[H", 3);
+	abAppend(&ab, ESC_SEQ("?25l"), 6);
+	abAppend(&ab, ESC_SEQ("H"), 3);
 
 	// draw file rows
 	editorDrawRows(&ab);
@@ -1202,7 +1202,7 @@ void editorRefresh()
 	abAppend(&ab, buf, strlen(buf));
 
 	// show cursor
-	abAppend(&ab, "\x1b[?25h", 6);
+	abAppend(&ab, ESC_SEQ("?25h"), 6);
 
 	// render
 	(void)!write(STDOUT_FILENO, ab.b, ab.len);
