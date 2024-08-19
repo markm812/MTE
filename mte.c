@@ -40,6 +40,12 @@ enum EditorKey
 	END_KEY,
 };
 
+enum EditorHighlight
+{
+	HL_NORMAL = 0,
+	HL_NUMBER
+};
+
 /*** data ***/
 typedef struct EditorRow
 {
@@ -47,6 +53,7 @@ typedef struct EditorRow
 	int rsize;
 	char *chars;
 	char *render;
+	unsigned char *highlight;
 } EditorRow;
 
 struct EditorContext
@@ -284,6 +291,37 @@ int getWindowSize(int *rows, int *cols)
 	return 0;
 }
 
+/*** Syntax highlight***/
+void editorUpdateSyntax(EditorRow *row)
+{
+	row->highlight = realloc(row->highlight, row->rsize);
+	if (!row->highlight)
+	{
+		terminate("[error] realloc");
+	}
+
+	memset(row->highlight, HL_NORMAL, row->rsize);
+
+	for (int i = 0; i < row->rsize; i++)
+	{
+		if (isdigit(row->render[i]))
+		{
+			row->highlight[i] = HL_NUMBER;
+		}
+	}
+}
+
+int editorSyntaxToColor(int highlight)
+{
+	switch (highlight)
+	{
+	case HL_NUMBER:
+		return 31;
+	default:
+		return 37;
+	}
+}
+
 /*** Row operations ***/
 int editorRowCursorXToRenderX(EditorRow *row, int cursorX)
 {
@@ -339,6 +377,8 @@ void editorUpdateRow(EditorRow *row)
 	}
 	row->render[at] = '\0';
 	row->rsize = at;
+
+	editorUpdateSyntax(row);
 }
 
 void editorInsertRow(int at, char *s, size_t len)
@@ -367,6 +407,7 @@ void editorInsertRow(int at, char *s, size_t len)
 	newRow->size = len;
 	newRow->rsize = 0;
 	newRow->render = NULL;
+	newRow->highlight = NULL;
 	editorUpdateRow(newRow);
 
 	EC.dirty++;
@@ -377,6 +418,7 @@ void editorFreeRow(EditorRow *row)
 {
 	free(row->render);
 	free(row->chars);
+	free(row->highlight);
 }
 
 void editorDelRow(int at)
@@ -609,7 +651,7 @@ writeerr:
 	return 1;
 }
 
-/* search */
+/*** search ***/
 void editorSearchCallback(char *pattern, int key)
 {
 	static int lastMatchRow = -1;
@@ -1153,9 +1195,10 @@ void editorDrawRows(struct abuf *ab)
 	for (int y = 0; y < EC.screenRows; ++y)
 	{
 		int rowIndex = y + EC.rowOffset;
-		// empty rows
+
 		if (rowIndex >= EC.numRows)
 		{
+			// Display welcome message or tilde on empty rows
 			if (EC.numRows == 0 && y == EC.screenRows / 3)
 			{
 				editorDrawWelcomeMessage(ab);
@@ -1167,6 +1210,7 @@ void editorDrawRows(struct abuf *ab)
 		}
 		else
 		{
+			// Determine the number of characters to draw from the current row
 			int len = EC.row[rowIndex].rsize - EC.columnOffset;
 			if (len < 0)
 			{
@@ -1176,12 +1220,41 @@ void editorDrawRows(struct abuf *ab)
 			{
 				len = EC.screenColumns;
 			}
-			abAppend(ab, &EC.row[rowIndex].render[EC.columnOffset], len);
+
+			char *c = &EC.row[rowIndex].render[EC.columnOffset];
+			unsigned char *hl = &EC.row[rowIndex].highlight[EC.columnOffset];
+			int currentColor = -1;
+			// Draw the visible portion of the row
+			for (int j = 0; j < len; j++)
+			{
+				// Highlight digits in red
+				if (hl[j] == HL_NORMAL)
+				{
+					if (currentColor != HL_NORMAL)
+					{
+						abAppend(ab, ESC_SEQ("39m"), 5);
+						currentColor = HL_NORMAL;
+					}
+					abAppend(ab, &c[j], 1);
+				}
+				else
+				{
+					int color = editorSyntaxToColor(hl[j]);
+					if (color != currentColor)
+					{
+						currentColor = color;
+						char buf[16];
+						int clen = snprintf(buf, sizeof(buf), ESC_SEQ("%dm"), color);
+						abAppend(ab, buf, clen);
+					}
+					abAppend(ab, &c[j], 1);
+				}
+			}
+			abAppend(ab, ESC_SEQ("39m"), 5);
 		}
 
-		// clear line end & append next line
+		// Clear the line from the cursor to the end and move to the next line
 		abAppend(ab, ESC_SEQ("K"), 3);
-		// if (y < EC.screenRows - 1)
 		abAppend(ab, "\r\n", 2);
 	}
 }
