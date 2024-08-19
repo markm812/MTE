@@ -213,27 +213,40 @@ void editorExit()
 
 int getCursorPosition(int *rows, int *cols)
 {
-	if (write(STDOUT_FILENO, ESC_SEQ("6n"), 4) != 4)
-		return -1;
-
 	char buf[32];
 	unsigned int i = 0;
 
+	// request cursor position
+	if (write(STDOUT_FILENO, ESC_SEQ("6n"), 4) != 4)
+	{
+		return -1;
+	}
+
+	// read into buffer
 	while (i < sizeof(buf) - 1)
 	{
 		if (read(STDIN_FILENO, &buf[i], 1) != 1)
-			break;
+		{
+			return -1;
+		}
 		if (buf[i] == 'R')
+		{
 			break;
+		}
 		++i;
 	}
 	buf[i] = '\0';
 
+	// validate
 	if (buf[0] != ESC_KEY || buf[1] != '[')
+	{
 		return -1;
+	}
 
 	if (sscanf(&buf[2], "%d;%d", rows, cols) != 2)
+	{
 		return -1;
+	}
 
 	return 0;
 }
@@ -242,10 +255,11 @@ int getWindowSize(int *rows, int *cols)
 {
 	struct winsize ws;
 
-	// ioctl will place screen size values into ws on success
+	// ioctl get screen size values into ws on success
 	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0)
 	{
-		if (write(STDOUT_FILENO, ESC_SEQ("999C")ESC_SEQ("999B"), 12) != 12)
+		// fallbacks
+		if (write(STDOUT_FILENO, ESC_SEQ("999C") ESC_SEQ("999B"), 12) != 12)
 			return -1;
 		return getCursorPosition(rows, cols);
 	}
