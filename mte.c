@@ -100,14 +100,18 @@ void disableRawMode()
 {
 	// Reset raw mode & input leftover will be discarded
 	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &EC.oldtio) == -1)
+	{
 		terminate("[Error] tcsetattr");
+	}
 }
 
 void enableRawMode()
 {
 	// Get current parameters & register exit recovery
 	if (tcgetattr(STDIN_FILENO, &EC.oldtio) == -1)
+	{
 		terminate("[Error] tcgetattr");
+	}
 	atexit(disableRawMode);
 
 	struct termios newtio = EC.oldtio;
@@ -119,7 +123,9 @@ void enableRawMode()
 	newtio.c_cc[VTIME] = 1;
 
 	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &newtio) == -1)
+	{
 		terminate("[Error] tcsetattr");
+	}
 }
 
 int editorReadKey()
@@ -129,7 +135,9 @@ int editorReadKey()
 	while ((size = read(STDIN_FILENO, &c, 1)) != 1)
 	{
 		if (size == -1 && errno != EAGAIN)
+		{
 			terminate("[Error] read");
+		}
 	}
 
 	// ESC keys
@@ -138,9 +146,13 @@ int editorReadKey()
 		char seq[3];
 
 		if (read(STDIN_FILENO, &seq[0], 1) != 1)
+		{
 			return ESC_KEY;
+		}
 		if (read(STDIN_FILENO, &seq[1], 1) != 1)
+		{
 			return ESC_KEY;
+		}
 
 		if (seq[0] == '[')
 		{
@@ -260,7 +272,9 @@ int getWindowSize(int *rows, int *cols)
 	{
 		// fallbacks
 		if (write(STDOUT_FILENO, ESC_SEQ("999C") ESC_SEQ("999B"), 12) != 12)
+		{
 			return -1;
+		}
 		return getCursorPosition(rows, cols);
 	}
 
@@ -293,8 +307,12 @@ void editorUpdateRow(EditorRow *row)
 	int tabs = 0;
 	int j;
 	for (j = 0; j < row->size; j++)
+	{
 		if (row->chars[j] == '\t')
+		{
 			tabs++;
+		}
+	}
 
 	free(row->render);
 	// each tab is 8 chars so +7 per tab
@@ -310,7 +328,9 @@ void editorUpdateRow(EditorRow *row)
 		{
 			row->render[at++] = ' ';
 			while (at % TAB_STOP != 0)
+			{
 				row->render[at++] = ' ';
+			}
 		}
 		else
 		{
@@ -1238,7 +1258,9 @@ void initEditor()
 	EC.dirty = 0;
 
 	if (getWindowSize(&EC.screenRows, &EC.screenColumns) == -1)
+	{
 		terminate("[Error] getWindowSize");
+	}
 
 	// reserve line for status menu
 	EC.screenRows -= 2;
