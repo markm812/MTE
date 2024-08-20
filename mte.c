@@ -689,6 +689,16 @@ void editorSearchCallback(char *pattern, int key)
 	static int lastMatchRow = -1;
 	static int lastMatchX = -1;
 	static int direction = 1;
+	static int savedHighlightLine;
+	static char *savedHighlightChars = NULL;
+
+	// restore highlight
+	if (savedHighlightChars)
+	{
+		memcpy(EC.row[savedHighlightLine].highlight, savedHighlightChars, EC.row[savedHighlightLine].rsize);
+		free(savedHighlightChars);
+		savedHighlightChars = NULL;
+	}
 
 	if (key == ENTER_KEY || key == ESC_KEY)
 	{
@@ -757,6 +767,11 @@ void editorSearchCallback(char *pattern, int key)
 			lastMatchX = match - row->render;
 			EC.cursorX = editorRenderXToCursorX(row, match - row->render + strlen(pattern));
 			EC.cursorXS = EC.cursorX;
+
+			// Save for highlight restore
+			savedHighlightLine = currentLine;
+			savedHighlightChars = malloc(row->rsize);
+			memcpy(savedHighlightChars, row->highlight, row->rsize);
 			memset(&row->highlight[match - row->render], HL_MATCH, strlen(pattern));
 			break;
 		}
