@@ -25,6 +25,32 @@
 #define ESC_KEY '\x1b'
 #define ESC_SEQ(seq) "\x1b[" seq
 #define ENTER_KEY '\r'
+#define NEW_LINE "\r\n"
+
+#define ESC_SEQ_CLEAR_SCREEN "\x1b[2J]"
+#define ESC_SEQ_RESET_CURSOR "\x1b[H"
+#define ESC_SEQ_ENABLE_ALT_SCREEN "\x1b[?1049h"
+#define ESC_SEQ_DISABLE_ALT_SCREEN "\x1b[?1049l"
+#define ESC_SEQ_GET_CURSOR "\x1b[6n"
+#define ESC_SEQ_SHOW_CURSOR "\x1b[?25h"
+#define ESC_SEQ_HIDE_CURSOR "\x1b[?25l"
+#define ESC_SEQ_ERASE_INLINE "\x1b[K"
+#define ESC_SEQ_INVERT_BG_COLOR "\x1b[7m"
+#define ESC_SEQ_DEFAULT_BG_COLOR "\x1b[m"
+#define ESC_SEQ_DEFAULT_FG_COLOR "\x1b[39m"
+
+#define NEW_LINE_SZ 2
+#define ESC_SEQ_CLEAR_SCREEN_SZ 4
+#define ESC_SEQ_RESET_CURSOR_SZ 3
+#define ESC_SEQ_ENABLE_ALT_SCREEN_SZ 8
+#define ESC_SEQ_DISABLE_ALT_SCREEN_SZ 8
+#define ESC_SEQ_GET_CURSOR_SZ 4
+#define ESC_SEQ_SHOW_CURSOR_SZ 6
+#define ESC_SEQ_HIDE_CURSOR_SZ 6
+#define ESC_SEQ_ERASE_INLINE_SZ 3
+#define ESC_SEQ_INVERT_BG_COLOR_SZ 4
+#define ESC_SEQ_DEFAULT_BG_COLOR_SZ 3
+#define ESC_SEQ_DEFAULT_FG_COLOR_SZ 5
 
 enum EditorKey
 {
@@ -97,8 +123,8 @@ void releaseMemory()
 
 void terminate(const char *s)
 {
-	(void)!write(STDOUT_FILENO, ESC_SEQ("2J"), 4);
-	(void)!write(STDOUT_FILENO, ESC_SEQ("H"), 3);
+	(void)!write(STDOUT_FILENO, ESC_SEQ_CLEAR_SCREEN, ESC_SEQ_CLEAR_SCREEN_SZ);
+	(void)!write(STDOUT_FILENO, ESC_SEQ_RESET_CURSOR, ESC_SEQ_RESET_CURSOR_SZ);
 	perror(s);
 	releaseMemory();
 	exit(1);
@@ -135,7 +161,7 @@ void enableRawMode()
 		terminate("[Error] tcsetattr");
 	}
 
-	(void)!write(STDOUT_FILENO, ESC_SEQ("?1049h"), 8);
+	(void)!write(STDOUT_FILENO, ESC_SEQ_ENABLE_ALT_SCREEN, ESC_SEQ_ENABLE_ALT_SCREEN_SZ);
 }
 
 int editorReadKey()
@@ -227,9 +253,9 @@ int editorReadKey()
 
 void editorExit()
 {
-	(void)!write(STDOUT_FILENO, ESC_SEQ("2J"), 4);
-	(void)!write(STDOUT_FILENO, ESC_SEQ("H"), 3);
-	(void)!write(STDOUT_FILENO, ESC_SEQ("?1049l"), 8);
+	(void)!write(STDOUT_FILENO, ESC_SEQ_CLEAR_SCREEN, ESC_SEQ_CLEAR_SCREEN_SZ);
+	(void)!write(STDOUT_FILENO, ESC_SEQ_RESET_CURSOR, ESC_SEQ_RESET_CURSOR_SZ);
+	(void)!write(STDOUT_FILENO, ESC_SEQ_DISABLE_ALT_SCREEN, ESC_SEQ_DISABLE_ALT_SCREEN_SZ);
 	releaseMemory();
 	exit(0);
 }
@@ -240,7 +266,7 @@ int getCursorPosition(int *rows, int *cols)
 	unsigned int i = 0;
 
 	// request cursor position
-	if (write(STDOUT_FILENO, ESC_SEQ("6n"), 4) != 4)
+	if (write(STDOUT_FILENO, ESC_SEQ_GET_CURSOR, ESC_SEQ_GET_CURSOR_SZ) != 4)
 	{
 		return -1;
 	}
@@ -1134,7 +1160,7 @@ void editorScroll()
 
 void editorDrawMessageBar(struct abuf *ab)
 {
-	abAppend(ab, ESC_SEQ("K"), 3);
+	abAppend(ab, ESC_SEQ_ERASE_INLINE, ESC_SEQ_ERASE_INLINE_SZ);
 	int msgLen = strlen(EC.statusMsg);
 	if (msgLen > EC.screenColumns)
 	{
@@ -1149,7 +1175,7 @@ void editorDrawMessageBar(struct abuf *ab)
 void editorDrawStatusBar(struct abuf *ab)
 {
 	// switch to inverted color
-	abAppend(ab, ESC_SEQ("7m"), 4);
+	abAppend(ab, ESC_SEQ_INVERT_BG_COLOR, ESC_SEQ_INVERT_BG_COLOR_SZ);
 
 	char status[80], rstatus[80];
 	int statusLen = snprintf(status, sizeof(status), "%.20s - %d lines %s",
@@ -1168,8 +1194,8 @@ void editorDrawStatusBar(struct abuf *ab)
 	abAppend(ab, rstatus, rstatusLen);
 
 	// switch back to normal color
-	abAppend(ab, ESC_SEQ("m"), 3);
-	abAppend(ab, "\r\n", 2);
+	abAppend(ab, ESC_SEQ_DEFAULT_BG_COLOR, ESC_SEQ_DEFAULT_BG_COLOR_SZ);
+	abAppend(ab, NEW_LINE, NEW_LINE_SZ);
 }
 
 void editorDrawWelcomeMessage(struct abuf *ab)
@@ -1239,7 +1265,7 @@ void editorDrawRows(struct abuf *ab)
 				{
 					if (currentColor != HL_NORMAL)
 					{
-						abAppend(ab, ESC_SEQ("39m"), 5);
+						abAppend(ab, ESC_SEQ_DEFAULT_FG_COLOR, ESC_SEQ_DEFAULT_FG_COLOR_SZ);
 						currentColor = HL_NORMAL;
 					}
 					abAppend(ab, &c[j], 1);
@@ -1257,12 +1283,12 @@ void editorDrawRows(struct abuf *ab)
 					abAppend(ab, &c[j], 1);
 				}
 			}
-			abAppend(ab, ESC_SEQ("39m"), 5);
+			abAppend(ab, ESC_SEQ_DEFAULT_FG_COLOR, ESC_SEQ_DEFAULT_FG_COLOR_SZ);
 		}
 
 		// Clear the line from the cursor to the end and move to the next line
-		abAppend(ab, ESC_SEQ("K"), 3);
-		abAppend(ab, "\r\n", 2);
+		abAppend(ab, ESC_SEQ_ERASE_INLINE, ESC_SEQ_ERASE_INLINE_SZ);
+		abAppend(ab, NEW_LINE, NEW_LINE_SZ);
 	}
 }
 
@@ -1297,8 +1323,8 @@ void editorRefresh()
 	struct abuf ab = ABUF_INIT;
 
 	// hide cursor while repainting
-	abAppend(&ab, ESC_SEQ("?25l"), 6);
-	abAppend(&ab, ESC_SEQ("H"), 3);
+	abAppend(&ab, ESC_SEQ_HIDE_CURSOR, ESC_SEQ_HIDE_CURSOR_SZ);
+	abAppend(&ab, ESC_SEQ_RESET_CURSOR, ESC_SEQ_RESET_CURSOR_SZ);
 
 	// draw file rows
 	editorDrawRows(&ab);
@@ -1316,7 +1342,7 @@ void editorRefresh()
 	abAppend(&ab, buf, strlen(buf));
 
 	// show cursor
-	abAppend(&ab, ESC_SEQ("?25h"), 6);
+	abAppend(&ab, ESC_SEQ_SHOW_CURSOR, ESC_SEQ_SHOW_CURSOR_SZ);
 
 	// render
 	(void)!write(STDOUT_FILENO, ab.b, ab.len);
