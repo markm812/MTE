@@ -21,36 +21,36 @@
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define MTE_VERSION "0.0.1"
 #define TAB_STOP 8
-#define KILO_QUIT_TIMES 1
+#define KILO_QUIT_TIMES 2
 #define ESC_KEY '\x1b'
 #define ESC_SEQ(seq) "\x1b[" seq
 #define ENTER_KEY '\r'
 #define NEW_LINE "\r\n"
 
 #define ESC_SEQ_CLEAR_SCREEN "\x1b[2J]"
-#define ESC_SEQ_RESET_CURSOR "\x1b[H"
-#define ESC_SEQ_ENABLE_ALT_SCREEN "\x1b[?1049h"
-#define ESC_SEQ_DISABLE_ALT_SCREEN "\x1b[?1049l"
-#define ESC_SEQ_GET_CURSOR "\x1b[6n"
-#define ESC_SEQ_SHOW_CURSOR "\x1b[?25h"
-#define ESC_SEQ_HIDE_CURSOR "\x1b[?25l"
-#define ESC_SEQ_ERASE_INLINE "\x1b[K"
-#define ESC_SEQ_INVERT_BG_COLOR "\x1b[7m"
 #define ESC_SEQ_DEFAULT_BG_COLOR "\x1b[m"
 #define ESC_SEQ_DEFAULT_FG_COLOR "\x1b[39m"
+#define ESC_SEQ_DISABLE_ALT_SCREEN "\x1b[?1049l"
+#define ESC_SEQ_ENABLE_ALT_SCREEN "\x1b[?1049h"
+#define ESC_SEQ_ERASE_INLINE "\x1b[K"
+#define ESC_SEQ_GET_CURSOR "\x1b[6n"
+#define ESC_SEQ_HIDE_CURSOR "\x1b[?25l"
+#define ESC_SEQ_INVERT_BG_COLOR "\x1b[7m"
+#define ESC_SEQ_RESET_CURSOR "\x1b[H"
+#define ESC_SEQ_SHOW_CURSOR "\x1b[?25h"
 
 #define NEW_LINE_SZ 2
 #define ESC_SEQ_CLEAR_SCREEN_SZ 4
-#define ESC_SEQ_RESET_CURSOR_SZ 3
-#define ESC_SEQ_ENABLE_ALT_SCREEN_SZ 8
-#define ESC_SEQ_DISABLE_ALT_SCREEN_SZ 8
-#define ESC_SEQ_GET_CURSOR_SZ 4
-#define ESC_SEQ_SHOW_CURSOR_SZ 6
-#define ESC_SEQ_HIDE_CURSOR_SZ 6
-#define ESC_SEQ_ERASE_INLINE_SZ 3
-#define ESC_SEQ_INVERT_BG_COLOR_SZ 4
 #define ESC_SEQ_DEFAULT_BG_COLOR_SZ 3
 #define ESC_SEQ_DEFAULT_FG_COLOR_SZ 5
+#define ESC_SEQ_DISABLE_ALT_SCREEN_SZ 8
+#define ESC_SEQ_ENABLE_ALT_SCREEN_SZ 8
+#define ESC_SEQ_ERASE_INLINE_SZ 3
+#define ESC_SEQ_GET_CURSOR_SZ 4
+#define ESC_SEQ_HIDE_CURSOR_SZ 6
+#define ESC_SEQ_INVERT_BG_COLOR_SZ 4
+#define ESC_SEQ_RESET_CURSOR_SZ 3
+#define ESC_SEQ_SHOW_CURSOR_SZ 6
 
 enum EditorKey
 {
@@ -346,7 +346,7 @@ int editorSyntaxToColor(int highlight)
 	switch (highlight)
 	{
 	case HL_NUMBER:
-		return 32;
+		return 36;
 	case HL_MATCH:
 		return 33;
 	default:
