@@ -134,6 +134,8 @@ void enableRawMode()
 	{
 		terminate("[Error] tcsetattr");
 	}
+
+	(void)!write(STDOUT_FILENO, ESC_SEQ("?1049h"), 8);
 }
 
 int editorReadKey()
@@ -227,6 +229,7 @@ void editorExit()
 {
 	(void)!write(STDOUT_FILENO, ESC_SEQ("2J"), 4);
 	(void)!write(STDOUT_FILENO, ESC_SEQ("H"), 3);
+	(void)!write(STDOUT_FILENO, ESC_SEQ("?1049l"), 8);
 	releaseMemory();
 	exit(0);
 }
