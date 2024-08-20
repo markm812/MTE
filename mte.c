@@ -43,7 +43,8 @@ enum EditorKey
 enum EditorHighlight
 {
 	HL_NORMAL = 0,
-	HL_NUMBER
+	HL_NUMBER,
+	HL_MATCH,
 };
 
 /*** data ***/
@@ -316,7 +317,9 @@ int editorSyntaxToColor(int highlight)
 	switch (highlight)
 	{
 	case HL_NUMBER:
-		return 31;
+		return 32;
+	case HL_MATCH:
+		return 33;
 	default:
 		return 37;
 	}
@@ -725,6 +728,7 @@ void editorSearchCallback(char *pattern, int key)
 			lastMatchX = match - row->render;
 			EC.cursorX = editorRenderXToCursorX(row, match - row->render + strlen(pattern));
 			EC.cursorXS = EC.cursorX;
+			memset(&row->highlight[match - row->render], HL_MATCH, strlen(pattern));
 			break;
 		}
 
@@ -1227,7 +1231,7 @@ void editorDrawRows(struct abuf *ab)
 			// Draw the visible portion of the row
 			for (int j = 0; j < len; j++)
 			{
-				// Highlight digits in red
+				// Keep normal text in default. Highlight digits in Red
 				if (hl[j] == HL_NORMAL)
 				{
 					if (currentColor != HL_NORMAL)
@@ -1304,7 +1308,7 @@ void editorRefresh()
 
 	// draw cursor
 	char buf[32];
-		snprintf(buf, sizeof(buf), ESC_SEQ("%d;%dH"), EC.cursorY - EC.rowOffset + 1,
+	snprintf(buf, sizeof(buf), ESC_SEQ("%d;%dH"), EC.cursorY - EC.rowOffset + 1,
 			 EC.renderX - EC.columnOffset + 1);
 	abAppend(&ab, buf, strlen(buf));
 
