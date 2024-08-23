@@ -27,7 +27,6 @@
 #define ENTER_KEY '\r'
 #define NEW_LINE "\r\n"
 #define SEPARATORS ",.;%<>()[]{}+-*/~="
-#define HL_HIGHLIGHT_NUMBERS (1 << 0)
 
 #define ESC_SEQ_CLEAR_SCREEN "\x1b[2J]"
 #define ESC_SEQ_DEFAULT_BG_COLOR "\x1b[m"
@@ -54,6 +53,9 @@
 #define ESC_SEQ_RESET_CURSOR_SZ 3
 #define ESC_SEQ_SHOW_CURSOR_SZ 6
 
+#define HL_HIGHLIGHT_NUMBERS (1 << 0)
+#define HL_HIGHLIGHT_STRING (1 << 1)
+
 enum EditorKey
 {
 	BACKSPACE = 127,
@@ -73,6 +75,7 @@ enum EditorHighlight
 	HL_NORMAL = 0,
 	HL_NUMBER,
 	HL_MATCH,
+	HL_STRING,
 };
 
 /*** data ***/
@@ -116,7 +119,7 @@ char *C_HL_EXTENSIONS[] = {".c", ".h", ".cpp", ".hpp", NULL};
 struct EditorSyntax HLDB[] = {
 	{"c",
 	 C_HL_EXTENSIONS,
-	 HL_HIGHLIGHT_NUMBERS},
+	 HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRING},
 };
 
 #define HLDB_ENTRIES (int)(sizeof(HLDB) / sizeof(HLDB[0]))
@@ -364,11 +367,48 @@ void editorUpdateSyntax(EditorRow *row)
 	}
 
 	int lastSeparator = 1;
+	int inString = 0;
+
 	int i = 0;
 	while (i < row->rsize)
 	{
 		char c = row->render[i];
 		unsigned char lastHighlight = (i > 0) ? row->highlight[i - 1] : HL_NORMAL;
+
+		if (EC.syntax->flags & HL_HIGHLIGHT_STRING)
+		{
+			if (inString)
+			{
+				row->highlight[i] = HL_STRING;
+
+				if (c == '\\' && i + 1 < row->rsize)
+				{
+					row->highlight[i + 1] = HL_STRING;
+					i += 2;
+					continue;
+				}
+
+				// end of string
+				if (c == inString)
+				{
+					inString = 0;
+				}
+				i++;
+				lastSeparator = 1;
+				continue;
+			}
+
+			// start of string
+			if (c == '"' || c == '\'')
+			{
+				inString = c;
+				row->highlight[i] = HL_STRING;
+				i++;
+				continue;
+				;
+			}
+		}
+
 		if (EC.syntax->flags & HL_HIGHLIGHT_NUMBERS)
 		{
 			if ((isdigit(c) && (lastSeparator || lastHighlight == HL_NUMBER)) || (c == '.' && lastHighlight == HL_NUMBER))
@@ -393,6 +433,8 @@ int editorSyntaxToColor(int highlight)
 		return 36;
 	case HL_MATCH:
 		return 33;
+	case HL_STRING:
+		return 35;
 	default:
 		return 37;
 	}
@@ -442,6 +484,7 @@ void editorSelectSyntaxHighlight()
 	// if no syntax is found, set syntax to NULL
 	EC.syntax = NULL;
 }
+
 /*** Row operations ***/
 int editorRowCursorXToRenderX(EditorRow *row, int cursorX)
 {
