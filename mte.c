@@ -355,7 +355,7 @@ int isSeparator(int c)
 void editorUpdateSyntax(EditorRow *row)
 {
 	row->highlight = realloc(row->highlight, row->rsize);
-	if (!row->highlight)
+	if (row->rsize && !row->highlight)
 	{
 		terminate("[error]@editorUpdateSyntax | realloc");
 	}
