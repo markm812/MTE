@@ -160,7 +160,7 @@ void disableRawMode()
 	// Reset raw mode & input leftover will be discarded
 	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &EC.oldtio) == -1)
 	{
-		terminate("[Error] tcsetattr");
+		terminate("[Error]@disableRawMode | tcsetattr");
 	}
 }
 
@@ -169,7 +169,7 @@ void enableRawMode()
 	// Get current parameters & register exit recovery
 	if (tcgetattr(STDIN_FILENO, &EC.oldtio) == -1)
 	{
-		terminate("[Error] tcgetattr");
+		terminate("[Error]@enableRawMode | tcgetattr");
 	}
 	atexit(disableRawMode);
 
@@ -183,7 +183,7 @@ void enableRawMode()
 
 	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &newtio) == -1)
 	{
-		terminate("[Error] tcsetattr");
+		terminate("[Error]@enableRawMode | tcsetattr");
 	}
 
 	(void)!write(STDOUT_FILENO, ESC_SEQ_ENABLE_ALT_SCREEN, ESC_SEQ_ENABLE_ALT_SCREEN_SZ);
@@ -197,7 +197,7 @@ int editorReadKey()
 	{
 		if (size == -1 && errno != EAGAIN)
 		{
-			terminate("[Error] read");
+			terminate("[Error]@editorReadKey | read");
 		}
 	}
 
@@ -357,7 +357,7 @@ void editorUpdateSyntax(EditorRow *row)
 	row->highlight = realloc(row->highlight, row->rsize);
 	if (!row->highlight)
 	{
-		terminate("[error] realloc");
+		terminate("[error]@editorUpdateSyntax | realloc");
 	}
 	memset(row->highlight, HL_NORMAL, row->rsize);
 
@@ -520,7 +520,7 @@ void editorUpdateRow(EditorRow *row)
 	row->render = malloc(row->size + tabs * (TAB_STOP - 1) + 1);
 	if (!row->render)
 	{
-		terminate("[error] malloc");
+		terminate("[error]@editorUpdateRow | malloc update row");
 	}
 	int at = 0;
 	for (j = 0; j < row->size; j++)
@@ -553,7 +553,7 @@ void editorInsertRow(int at, char *s, size_t len)
 	EC.row = realloc(EC.row, sizeof(EditorRow) * (EC.numRows + 1));
 	if (!EC.row)
 	{
-		terminate("[error] realloc");
+		terminate("[error]@editorInsertRow | realloc");
 	}
 	memmove(&EC.row[at + 1], &EC.row[at], sizeof(EditorRow) * (EC.numRows - at));
 
@@ -561,7 +561,7 @@ void editorInsertRow(int at, char *s, size_t len)
 	newRow->chars = malloc(len + 1);
 	if (!newRow->chars)
 	{
-		terminate("[error] malloc");
+		terminate("[error]@editorInsertRow | malloc");
 	}
 
 	// strcpy stops at null byte, use memcpy instead
@@ -618,7 +618,7 @@ void editorRowInsertChar(EditorRow *row, int at, int c)
 	char *newPtr = realloc(row->chars, row->size + 2);
 	if (!newPtr)
 	{
-		terminate("[error] realloc");
+		terminate("[error]@editorRowInsertChar | realloc");
 	}
 	row->chars = newPtr;
 	memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
@@ -742,7 +742,7 @@ void editorOpen(const char *filename)
 	FILE *fp = fopen(filename, "r");
 	if (!fp)
 	{
-		terminate("[Error] fopen");
+		terminate("[Error]@editorOpen | fopen");
 	}
 
 	char *line = NULL;
@@ -973,7 +973,7 @@ char *editorPrompt(const char *prompt, void (*callback)(char *s, int))
 	char *buffer = malloc(bufsize);
 	if (!buffer)
 	{
-		terminate("[error] malloc");
+		terminate("[error]@editorPrompt | malloc");
 	}
 
 	size_t buflen = 0;
@@ -1023,7 +1023,7 @@ char *editorPrompt(const char *prompt, void (*callback)(char *s, int))
 				buffer = realloc(buffer, bufsize);
 				if (!buffer)
 				{
-					terminate("[error] realloc");
+					terminate("[error]@editorPrompt | realloc");
 				}
 			}
 			buffer[buflen++] = c;
@@ -1517,7 +1517,7 @@ void initEditor()
 
 	if (getWindowSize(&EC.screenRows, &EC.screenColumns) == -1)
 	{
-		terminate("[Error] getWindowSize");
+		terminate("[Error]@initEditor | getWindowSize");
 	}
 
 	// reserve line for status menu
