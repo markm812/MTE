@@ -26,6 +26,8 @@
 #define ESC_SEQ(seq) "\x1b[" seq
 #define ENTER_KEY '\r'
 #define NEW_LINE "\r\n"
+#define SEPARATORS ",.;%<>()[]{}+-*/~="
+#define HL_HIGHLIGHT_NUMBERS (1 << 0)
 
 #define ESC_SEQ_CLEAR_SCREEN "\x1b[2J]"
 #define ESC_SEQ_DEFAULT_BG_COLOR "\x1b[m"
@@ -74,6 +76,13 @@ enum EditorHighlight
 };
 
 /*** data ***/
+struct EditorSyntax
+{
+	char *fileType;
+	char **filematch;
+	int flags;
+};
+
 typedef struct EditorRow
 {
 	int size;
@@ -96,8 +105,21 @@ struct EditorContext
 	char statusMsg[80];
 	time_t statusMsgTime;
 	EditorRow *row;
+	struct EditorSyntax *syntax;
 	struct termios oldtio;
 } EC;
+
+/*** filetypes ***/
+char *C_HL_EXTENSIONS[] = {".c", ".h", ".cpp", ".hpp", NULL};
+
+// store all HL catagories
+struct EditorSyntax HLDB[] = {
+	{"c",
+	 C_HL_EXTENSIONS,
+	 HL_HIGHLIGHT_NUMBERS},
+};
+
+#define HLDB_ENTRIES (int)(sizeof(HLDB) / sizeof(HLDB[0]))
 
 /*** function prototypes ***/
 void editorSetStatusMessage(const char *fmt, ...);
@@ -322,6 +344,11 @@ int getWindowSize(int *rows, int *cols)
 }
 
 /*** Syntax highlight***/
+int isSeparator(int c)
+{
+	return isspace(c) || strchr(SEPARATORS, c) != NULL;
+}
+
 void editorUpdateSyntax(EditorRow *row)
 {
 	row->highlight = realloc(row->highlight, row->rsize);
@@ -329,15 +356,32 @@ void editorUpdateSyntax(EditorRow *row)
 	{
 		terminate("[error] realloc");
 	}
-
 	memset(row->highlight, HL_NORMAL, row->rsize);
 
-	for (int i = 0; i < row->rsize; i++)
+	if (!EC.syntax)
 	{
-		if (isdigit(row->render[i]))
+		return;
+	}
+
+	int lastSeparator = 1;
+	int i = 0;
+	while (i < row->rsize)
+	{
+		char c = row->render[i];
+		unsigned char lastHighlight = (i > 0) ? row->highlight[i - 1] : HL_NORMAL;
+		if (EC.syntax->flags & HL_HIGHLIGHT_NUMBERS)
 		{
-			row->highlight[i] = HL_NUMBER;
+			if ((isdigit(c) && (lastSeparator || lastHighlight == HL_NUMBER)) || (c == '.' && lastHighlight == HL_NUMBER))
+			{
+				row->highlight[i] = HL_NUMBER;
+				i++;
+				lastSeparator = 0;
+				continue;
+			}
 		}
+
+		lastSeparator = isSeparator(c);
+		i++;
 	}
 }
 
@@ -354,6 +398,50 @@ int editorSyntaxToColor(int highlight)
 	}
 }
 
+void editorSelectSyntaxHighlight()
+{
+	if (EC.filename == NULL)
+	{
+		EC.syntax = NULL;
+		return;
+	}
+
+	char *ext = strrchr(EC.filename, '.');
+	if (ext == NULL)
+	{
+		EC.syntax = NULL;
+		return;
+	}
+
+	// iterate HL catagories
+	for (int j = 0; j < HLDB_ENTRIES; j++)
+	{
+		struct EditorSyntax *syntax = &HLDB[j];
+
+		// check matching specific extension
+		for (int i = 0; syntax->filematch[i] != NULL; i++)
+		{
+			int is_ext = (syntax->filematch[i][0] == '.');
+
+			// check extension matches or contains specific name
+			if ((is_ext && strcmp(ext, syntax->filematch[i]) == 0) ||
+				(!is_ext && strstr(EC.filename, syntax->filematch[i]) != NULL))
+			{
+				EC.syntax = syntax;
+				// re-apply highlight
+				for (int fileRow = 0; fileRow < EC.numRows; ++fileRow)
+				{
+					editorUpdateSyntax(&EC.row[fileRow]);
+				}
+
+				return;
+			}
+		}
+	}
+
+	// if no syntax is found, set syntax to NULL
+	EC.syntax = NULL;
+}
 /*** Row operations ***/
 int editorRowCursorXToRenderX(EditorRow *row, int cursorX)
 {
@@ -606,6 +694,8 @@ void editorOpen(const char *filename)
 		memcpy(EC.filename, filename, fnlen);
 	}
 
+	editorSelectSyntaxHighlight();
+
 	FILE *fp = fopen(filename, "r");
 	if (!fp)
 	{
@@ -640,6 +730,9 @@ int editorSave()
 			editorSetStatusMessage("Cancelled");
 			return 1;
 		}
+
+		// update syntax after naming
+		editorSelectSyntaxHighlight();
 	}
 
 	const char *extension = ".tmp";
@@ -727,7 +820,7 @@ void editorSearchCallback(char *pattern, int key)
 
 	int currentLine = MAX(lastMatchRow, 0);
 	int currentX = lastMatchX;
-	for (int done = 0; done < EC.numRows; ++done)
+	for (int i = 0; i < EC.numRows; ++i)
 	{
 		if (currentLine < 0)
 		{
@@ -1195,7 +1288,7 @@ void editorDrawStatusBar(struct abuf *ab)
 	char status[80], rstatus[80];
 	int statusLen = snprintf(status, sizeof(status), "%.20s - %d lines %s",
 							 EC.filename ? EC.filename : "[Unamed]", EC.numRows, EC.dirty ? "(modified)" : "");
-	int rstatusLen = snprintf(rstatus, sizeof(rstatus), "%d/%d", EC.cursorY + 1, EC.numRows);
+	int rstatusLen = snprintf(rstatus, sizeof(rstatus), "%s | %d/%d", EC.syntax ? EC.syntax->fileType : "No filetype", EC.cursorY + 1, EC.numRows);
 	if (statusLen > EC.screenColumns)
 	{
 		statusLen = EC.screenColumns;
@@ -1377,6 +1470,7 @@ void initEditor()
 	EC.statusMsgTime = 0;
 	EC.messageLifeTime = 5;
 	EC.dirty = 0;
+	EC.syntax = NULL;
 
 	if (getWindowSize(&EC.screenRows, &EC.screenColumns) == -1)
 	{
