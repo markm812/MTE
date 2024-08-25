@@ -1478,6 +1478,14 @@ void editorDrawRows(struct abuf *ab)
 					abAppend(ab, "\x1b[7m", 4);
 					abAppend(ab, &symbol, 1);
 					abAppend(ab, "\x1b[m", 3);
+					
+					// restore current color
+					if (currentColor != -1)
+					{
+						char buf[16];
+						int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", currentColor);
+						abAppend(ab, buf, clen);
+					}
 				}
 				// Keep normal text in default else highlight
 				else if (hl[j] == HL_NORMAL)
