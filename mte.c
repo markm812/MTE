@@ -1471,8 +1471,16 @@ void editorDrawRows(struct abuf *ab)
 			// Draw the visible portion of the row
 			for (int j = 0; j < len; j++)
 			{
-				// Keep normal text in default. Highlight digits in Red
-				if (hl[j] == HL_NORMAL)
+				// non-printable character
+				if (iscntrl(c[j]))
+				{
+					char symbol = (c[j] <= 26) ? '@' + c[j] : '?';
+					abAppend(ab, "\x1b[7m", 4);
+					abAppend(ab, &symbol, 1);
+					abAppend(ab, "\x1b[m", 3);
+				}
+				// Keep normal text in default else highlight
+				else if (hl[j] == HL_NORMAL)
 				{
 					if (currentColor != HL_NORMAL)
 					{
