@@ -54,7 +54,7 @@
 #define ESC_SEQ_SHOW_CURSOR_SZ 6
 
 #define HL_HIGHLIGHT_NUMBERS (1 << 0)
-#define HL_HIGHLIGHT_STRING (1 << 1)
+#define HL_HIGHLIGHT_STRINGS (1 << 1)
 
 enum EditorKey
 {
@@ -76,6 +76,7 @@ enum EditorHighlight
 	HL_NUMBER,
 	HL_MATCH,
 	HL_STRING,
+	HL_COMMENT,
 };
 
 /*** data ***/
@@ -83,6 +84,7 @@ struct EditorSyntax
 {
 	char *fileType;
 	char **filematch;
+	char *singleLineCommentStart;
 	int flags;
 };
 
@@ -119,7 +121,8 @@ char *C_HL_EXTENSIONS[] = {".c", ".h", ".cpp", ".hpp", NULL};
 struct EditorSyntax HLDB[] = {
 	{"c",
 	 C_HL_EXTENSIONS,
-	 HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRING},
+	 "//",
+	 HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
 };
 
 #define HLDB_ENTRIES (int)(sizeof(HLDB) / sizeof(HLDB[0]))
@@ -366,6 +369,9 @@ void editorUpdateSyntax(EditorRow *row)
 		return;
 	}
 
+	char *singleLineCommentStart = EC.syntax->singleLineCommentStart;
+    int commentStartLength = singleLineCommentStart ? strlen(singleLineCommentStart) : 0;
+
 	int lastSeparator = 1;
 	int inString = 0;
 
@@ -375,7 +381,15 @@ void editorUpdateSyntax(EditorRow *row)
 		char c = row->render[i];
 		unsigned char lastHighlight = (i > 0) ? row->highlight[i - 1] : HL_NORMAL;
 
-		if (EC.syntax->flags & HL_HIGHLIGHT_STRING)
+		// check for single-line comments
+        if (commentStartLength && !inString) {
+            if (!strncmp(&row->render[i], singleLineCommentStart, commentStartLength)) {
+                memset(&row->highlight[i], HL_COMMENT, row->rsize - i);
+                break;
+            }
+        }
+
+		if (EC.syntax->flags & HL_HIGHLIGHT_STRINGS)
 		{
 			if (inString)
 			{
@@ -393,19 +407,18 @@ void editorUpdateSyntax(EditorRow *row)
 				{
 					inString = 0;
 				}
-				i++;
 				lastSeparator = 1;
+				i++;
 				continue;
 			}
 
 			// start of string
 			if (c == '"' || c == '\'')
 			{
-				inString = c;
 				row->highlight[i] = HL_STRING;
+				inString = c;
 				i++;
 				continue;
-				;
 			}
 		}
 
@@ -414,8 +427,8 @@ void editorUpdateSyntax(EditorRow *row)
 			if ((isdigit(c) && (lastSeparator || lastHighlight == HL_NUMBER)) || (c == '.' && lastHighlight == HL_NUMBER))
 			{
 				row->highlight[i] = HL_NUMBER;
-				i++;
 				lastSeparator = 0;
+				i++;
 				continue;
 			}
 		}
@@ -435,6 +448,8 @@ int editorSyntaxToColor(int highlight)
 		return 33;
 	case HL_STRING:
 		return 35;
+	case HL_COMMENT:
+		return 32;
 	default:
 		return 37;
 	}
