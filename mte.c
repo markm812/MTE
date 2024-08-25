@@ -77,6 +77,8 @@ enum EditorHighlight
 	HL_MATCH,
 	HL_STRING,
 	HL_COMMENT,
+	HL_KEYWORD_MAIN,
+	HL_KEYWORD_SUB,
 };
 
 /*** data ***/
@@ -84,6 +86,7 @@ struct EditorSyntax
 {
 	char *fileType;
 	char **filematch;
+	char **keywords;
 	char *singleLineCommentStart;
 	int flags;
 };
@@ -116,11 +119,18 @@ struct EditorContext
 
 /*** filetypes ***/
 char *C_HL_EXTENSIONS[] = {".c", ".h", ".cpp", ".hpp", NULL};
+char *C_HL_keywords[] = {
+	"switch", "if", "while", "for", "break", "continue", "return", "else",
+	"struct", "union", "typedef", "static", "enum", "class", "case", "#define", "#include",
+	"int|",
+	"long|", "double|", "float|", "char|", "unsigned|", "signed|",
+	"void|", NULL};
 
 // store all HL catagories
 struct EditorSyntax HLDB[] = {
 	{"c",
 	 C_HL_EXTENSIONS,
+	 C_HL_keywords,
 	 "//",
 	 HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
 };
@@ -369,10 +379,12 @@ void editorUpdateSyntax(EditorRow *row)
 		return;
 	}
 
-	char *singleLineCommentStart = EC.syntax->singleLineCommentStart;
-    int commentStartLength = singleLineCommentStart ? strlen(singleLineCommentStart) : 0;
+	char **keywords = EC.syntax->keywords;
 
-	int lastSeparator = 1;
+	char *singleLineCommentStart = EC.syntax->singleLineCommentStart;
+	int commentStartLength = singleLineCommentStart ? strlen(singleLineCommentStart) : 0;
+
+	int isLastCharSeparator = 1;
 	int inString = 0;
 
 	int i = 0;
@@ -382,12 +394,14 @@ void editorUpdateSyntax(EditorRow *row)
 		unsigned char lastHighlight = (i > 0) ? row->highlight[i - 1] : HL_NORMAL;
 
 		// check for single-line comments
-        if (commentStartLength && !inString) {
-            if (!strncmp(&row->render[i], singleLineCommentStart, commentStartLength)) {
-                memset(&row->highlight[i], HL_COMMENT, row->rsize - i);
-                break;
-            }
-        }
+		if (commentStartLength && !inString)
+		{
+			if (!strncmp(&row->render[i], singleLineCommentStart, commentStartLength))
+			{
+				memset(&row->highlight[i], HL_COMMENT, row->rsize - i);
+				break;
+			}
+		}
 
 		if (EC.syntax->flags & HL_HIGHLIGHT_STRINGS)
 		{
@@ -407,7 +421,7 @@ void editorUpdateSyntax(EditorRow *row)
 				{
 					inString = 0;
 				}
-				lastSeparator = 1;
+				isLastCharSeparator = 1;
 				i++;
 				continue;
 			}
@@ -424,16 +438,43 @@ void editorUpdateSyntax(EditorRow *row)
 
 		if (EC.syntax->flags & HL_HIGHLIGHT_NUMBERS)
 		{
-			if ((isdigit(c) && (lastSeparator || lastHighlight == HL_NUMBER)) || (c == '.' && lastHighlight == HL_NUMBER))
+			if ((isdigit(c) && (isLastCharSeparator || lastHighlight == HL_NUMBER)) || (c == '.' && lastHighlight == HL_NUMBER))
 			{
 				row->highlight[i] = HL_NUMBER;
-				lastSeparator = 0;
+				isLastCharSeparator = 0;
 				i++;
 				continue;
 			}
 		}
 
-		lastSeparator = isSeparator(c);
+		// keyword highlight
+		if (isLastCharSeparator)
+		{
+			int j;
+			for (j = 0; keywords[j]; ++j)
+			{
+				int keywordLen = strlen(keywords[j]);
+				int isSubKeyword = keywords[j][keywordLen - 1] == '|';
+				if (isSubKeyword)
+				{
+					keywordLen--;
+				}
+
+				if (!strncmp(&row->render[i], keywords[j], keywordLen) && isSeparator(row->render[i + keywordLen]))
+				{
+					memset(&row->highlight[i], isSubKeyword ? HL_KEYWORD_SUB : HL_KEYWORD_MAIN, keywordLen);
+					i += keywordLen;
+					break;
+				}
+			}
+			if (keywords[j] != NULL)
+			{
+				isLastCharSeparator = 0;
+				continue;
+			}
+		}
+
+		isLastCharSeparator = isSeparator(c);
 		i++;
 	}
 }
@@ -445,11 +486,15 @@ int editorSyntaxToColor(int highlight)
 	case HL_NUMBER:
 		return 36;
 	case HL_MATCH:
-		return 33;
+		return 34;
 	case HL_STRING:
-		return 35;
+		return 33;
 	case HL_COMMENT:
 		return 32;
+	case HL_KEYWORD_MAIN:
+		return 35;
+	case HL_KEYWORD_SUB:
+		return 31;
 	default:
 		return 37;
 	}
