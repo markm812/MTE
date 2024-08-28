@@ -1021,7 +1021,8 @@ void editorSearchCallback(char *pattern, int key)
 			lastMatchX = match - row->render;
 			EC.cursorX = editorRenderXToCursorX(row, match - row->render + strlen(pattern));
 			EC.cursorXS = EC.cursorX;
-
+			EC.columnOffset = ((EC.cursorX - (int)strlen(pattern)) / EC.screenColumns) * EC.screenColumns;
+			
 			// Save for highlight restore
 			savedHighlightLine = currentLine;
 			savedHighlightChars = malloc(row->rsize);
@@ -1449,7 +1450,7 @@ void editorDrawStatusBar(struct abuf *ab)
 	char status[80], rstatus[80];
 	int statusLen = snprintf(status, sizeof(status), "%.20s - %d lines %s",
 							 EC.filename ? EC.filename : "[Unamed]", EC.numRows, EC.dirty ? "(modified)" : "");
-	int rstatusLen = snprintf(rstatus, sizeof(rstatus), "%s | %d/%d", EC.syntax ? EC.syntax->fileType : "No filetype", EC.cursorY + 1, EC.numRows);
+	int rstatusLen = snprintf(rstatus, sizeof(rstatus), "%s | Ln: %d/%d | Col: %d", EC.syntax ? EC.syntax->fileType : "No filetype", EC.cursorY + 1, EC.numRows, EC.renderX);
 	if (statusLen > EC.screenColumns)
 	{
 		statusLen = EC.screenColumns;
