@@ -1,3 +1,12 @@
+## Features
+- Raw text editor
+- Scrolling (with keyboard & mouse)
+- File I/O
+- Status bar with line/column number
+- Searching
+- Syntax highlight
+- Cursor position snapping and memorization
+
 ## Setup
 You will need a C compiler.  
 ### Linux:  
@@ -7,11 +16,33 @@ You will need a C compiler.
 ### macOS
 ```xcode-select --install```
 
-## Install
-```sudo make install```
+## Compile and run only
+```
+make
+```
+```
+./mte YOUR_FILE
+./mte test.txt  #example
+```
 
-## Run
-```mte YOUR_FILE```
+## Install and run
+```
+sudo make install
+```
+```
+mte YOUR_FILE
+mte mte.c  #example
+```
+
+## Upcoming features
+- Copy and paste
+- Undo & Redo
+- Auto indent
+- Line warp
+- Configurable settings
+- Additional filetype support with custom imports
+- Replace array buffer with Rope data structure
+- Vim like mode switching (Normal/Insert mode)
 
 ## Reference materials:
 - http://antirez.com/news/108
