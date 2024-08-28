@@ -9,12 +9,19 @@
 
 ## Setup
 You will need a C compiler.  
+
 ### Linux:  
-```sudo apt-get install gcc make```  
+```
+sudo apt-get install gcc make
+```  
 ### Windows (Bash):  
-```sudo apt-get install gcc make```
+```
+sudo apt-get install gcc make
+```
 ### macOS
-```xcode-select --install```
+```
+xcode-select --install
+```
 
 ## Compile and run only
 ```
